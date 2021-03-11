@@ -1,0 +1,8 @@
+numpy
+matplotlib
+opencv-contrib-python-headless
+Pillow
+tensorboard
+terminaltables
+torch torchvision torchaudio
+tqdm
