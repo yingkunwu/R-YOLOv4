@@ -12,7 +12,7 @@ from model.model import Yolo
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--test_folder", type=str, default="data/test3", help="path to dataset")
+    parser.add_argument("--test_folder", type=str, default="data/test", help="path to dataset")
     parser.add_argument("--weights_path", type=str, default="weights/AOD_800.pth", help="path to weights file")
     parser.add_argument("--class_path", type=str, default="data/coco.names", help="path to class label file")
     parser.add_argument("--conf_thres", type=float, default=0.7, help="object confidence threshold")
