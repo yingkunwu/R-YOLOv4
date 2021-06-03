@@ -153,6 +153,10 @@ usage: detect.py [-h] [--image_folder IMAGE_FOLDER] [--output_folder OUTPUT_FOLD
 <img src="./outputs/P0292.png" alt="car" height="430"/>
 <img src="./outputs/P0259.png" alt="plane" height="413"/>
 
+**Results on other datasets**
+<img src="./outputs/new9_864.jpg" alt="car" height="430"/>
+<img src="./outputs/new9_987.jpg" alt="car" height="430"/>
+
 
 ### References
 [yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection) </br>
