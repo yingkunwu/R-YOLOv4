@@ -48,19 +48,28 @@ class YoloLayer(nn.Module):
         self.metrics = {}
 
     def build_targets(self, pred_boxes, pred_cls, target):
-        ByteTensor = torch.cuda.ByteTensor if pred_boxes.is_cuda else torch.ByteTensor
-        FloatTensor = torch.cuda.FloatTensor if pred_boxes.is_cuda else torch.FloatTensor
+        #ByteTensor = torch.cuda.ByteTensor if pred_boxes.is_cuda else torch.ByteTensor
+        #FloatTensor = torch.cuda.FloatTensor if pred_boxes.is_cuda else torch.FloatTensor
+        device = 'cuda' if pred_boxes.is_cuda else 'cpu'
         nB, nA, nG, _, nC = pred_cls.size()
 
         # Output tensors
-        obj_mask = ByteTensor(nB, nA, nG, nG).fill_(0)
-        noobj_mask = ByteTensor(nB, nA, nG, nG).fill_(1)
-        class_mask = FloatTensor(nB, nA, nG, nG).fill_(0)
-        iou_scores = FloatTensor(nB, nA, nG, nG).fill_(0)
-        skew_iou = FloatTensor(nB, nA, nG, nG).fill_(0)
-        ciou_loss = FloatTensor(nB, nA, nG, nG).fill_(0)
-        ta = FloatTensor(nB, nA, nG, nG).fill_(0)
-        tcls = FloatTensor(nB, nA, nG, nG, nC).fill_(0)
+        #obj_mask = ByteTensor(nB, nA, nG, nG).fill_(0)
+        #noobj_mask = ByteTensor(nB, nA, nG, nG).fill_(1)
+        #class_mask = FloatTensor(nB, nA, nG, nG).fill_(0)
+        #iou_scores = FloatTensor(nB, nA, nG, nG).fill_(0)
+        #skew_iou = FloatTensor(nB, nA, nG, nG).fill_(0)
+        #ciou_loss = FloatTensor(nB, nA, nG, nG).fill_(0)
+        #ta = FloatTensor(nB, nA, nG, nG).fill_(0)
+        #tcls = FloatTensor(nB, nA, nG, nG, nC).fill_(0)
+        obj_mask = torch.zeros((nB, nA, nG, nG), dtype=torch.uint8, device=device)
+        noobj_mask = torch.ones((nB, nA, nG, nG), dtype=torch.uint8, device=device)
+        class_mask = torch.zeros((nB, nA, nG, nG), dtype=torch.float32, device=device)
+        iou_scores = torch.zeros((nB, nA, nG, nG), dtype=torch.float32, device=device)
+        skew_iou = torch.zeros((nB, nA, nG, nG), dtype=torch.float32, device=device)
+        ciou_loss = torch.zeros((nB, nA, nG, nG), dtype=torch.float32, device=device)
+        ta = torch.zeros((nB, nA, nG, nG), dtype=torch.float32, device=device)
+        tcls = torch.zeros((nB, nA, nG, nG, nC), dtype=torch.float32, device=device)
 
         # Convert ground truth position to position that relative to the size of box (grid size)
         target_boxes = torch.cat((target[:, 2:6] * nG, target[:, 6:]), dim=-1)
@@ -131,7 +140,8 @@ class YoloLayer(nn.Module):
         # anchor_step = len(anchors) // num_anchors
 
         # Tensors for cuda support
-        FloatTensor = torch.cuda.FloatTensor if output.is_cuda else torch.FloatTensor
+        #FloatTensor = torch.cuda.FloatTensor if output.is_cuda else torch.FloatTensor
+        device = 'cuda' if output.is_cuda else 'cpu'
 
         # output.shape-> [batch_size, num_anchors * (num_classes + 5), grid_size, grid_size]
         batch_size, grid_size = output.size(0), output.size(2)
@@ -152,17 +162,19 @@ class YoloLayer(nn.Module):
 
         # grid.shape-> [1, 1, 52, 52, 1]
         # 預測出來的(pred_x, pred_y)是相對於每個cell左上角的點，因此這邊需要由左上角往右下角配合grid_size加上對應的offset，畫出的圖才會在正確的位置上
-        grid_x = torch.arange(grid_size).repeat(grid_size, 1).view([1, 1, grid_size, grid_size]).type(FloatTensor)
-        grid_y = torch.arange(grid_size).repeat(grid_size, 1).t().view([1, 1, grid_size, grid_size]).type(FloatTensor)
+        grid_x = torch.arange(grid_size).repeat(grid_size, 1).view([1, 1, grid_size, grid_size]).to(device)
+        grid_y = torch.arange(grid_size).repeat(grid_size, 1).t().view([1, 1, grid_size, grid_size]).to(device)
 
         # anchor.shape-> [1, 3, 1, 1, 1]
-        self.masked_anchors = FloatTensor(self.masked_anchors)
+        #self.masked_anchors = FloatTensor(self.masked_anchors)
+        self.masked_anchors = torch.tensor(self.masked_anchors).to(device)
         anchor_w = self.masked_anchors[:, 0].view([1, self.num_anchors, 1, 1])
         anchor_h = self.masked_anchors[:, 1].view([1, self.num_anchors, 1, 1])
         anchor_a = self.masked_anchors[:, 2].view([1, self.num_anchors, 1, 1])
 
         # decode
-        pred_boxes = FloatTensor(prediction[..., :5].shape)
+        #pred_boxes = FloatTensor(prediction[..., :5].shape)
+        pred_boxes = torch.empty((prediction[..., :5].shape), dtype=torch.float32, device=device)
         pred_boxes[..., 0] = (pred_x + grid_x)
         pred_boxes[..., 1] = (pred_y + grid_y)
         pred_boxes[..., 2] = (torch.exp(pred_w) * anchor_w)
