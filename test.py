@@ -144,7 +144,20 @@ class Test:
         self.model = None
 
     def load_model(self):
-        weight_path = glob.glob(os.path.join("models", self.args.model_name, "*.pth"))[0]
+        model_path = os.path.join("weights", self.args.model_name)
+        if os.path.exists(model_path):
+            weight_path = glob.glob(os.path.join(model_path, "*.pth"))
+            if len(weight_path) == 0:
+                print("Model weight not found")
+                exit(1)
+            elif len(weight_path) > 1:
+                print("Multiple weights are found. Please keep only one weight in your model directory")
+                exit(1)
+            else:
+                weight_path = weight_path[0]
+        else:
+            print("Model is not exist")
+            exit(1)
         pretrained_dict = torch.load(weight_path, map_location=torch.device('cpu'))
         self.model = Yolo(n_classes=2)
         self.model = self.model.to(self.device)
