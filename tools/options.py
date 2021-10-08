@@ -3,7 +3,7 @@ import argparse
 class TrainOptions:
     def __init__(self):
         self.parser = argparse.ArgumentParser()
-        self.parser.add_argument("--train_path", type=str, default="data/train", help="path to train dataset")
+        self.parser.add_argument("--data_folder", type=str, default="data/train", help="path to train dataset")
         self.parser.add_argument("--weights_path", type=str, default="weights/pretrained/yolov4.pth", help="path to pretrained weights file")
         self.parser.add_argument("--model_name", type=str, default="UCAS_AOD", help="new model name")
         self.parser.add_argument("--epochs", type=int, default=50, help="number of epochs")
