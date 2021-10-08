@@ -1,8 +1,7 @@
 numpy
-matplotlib
-opencv-contrib-python-headless
 Pillow
+opencv-contrib-python-headless
 tensorboard
 terminaltables
-torch torchvision torchaudio
 tqdm
+shapely

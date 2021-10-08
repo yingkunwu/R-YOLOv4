@@ -39,6 +39,6 @@ def post_process(prediction, conf_thres=0.5, nms_thres=0.4):
                 keep_boxes += [detect[0].detach()]
                 detect = detect[~large_overlap]
             if keep_boxes:
-                output[batch] = torch.stack(keep_boxes)
+                output[batch] = torch.stack(keep_boxes).cpu()
 
     return output

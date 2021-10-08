@@ -1,5 +1,7 @@
 import torch
 import numpy as np
+import random
+import cv2
 import torch.nn.functional as F
 
 
@@ -10,7 +12,41 @@ def get_rot_mat(theta):
 
 
 def gaussian_noise(images, mean, std):
-    return images + (torch.randn(images.size()) * 0.2) * std + mean
+    return images + (torch.randn(images.size()) * 0.1) * std + mean
+
+
+def rand_uniform(min, max):
+    if min > max:
+        swap = min
+        min = max
+        max = swap
+    return random.random() * (max - min) + min
+
+
+def rand_scale(s):
+    scale = rand_uniform(1, s)
+    if random.randint(0, 1) % 2:
+        return scale
+    return 1. / scale
+
+
+def hsv(img):
+    hue = rand_uniform(-0.1, 0.1)
+    sat = rand_scale(1.3)
+    exp = rand_scale(1.3)
+
+    #print("hue: {}, sat: {}, exp: {}".format(hue, sat, exp))
+
+    img = img.numpy().transpose((1, 2, 0))
+    hsv_src = cv2.cvtColor(img.astype(np.float32), cv2.COLOR_RGB2HSV)  # RGB to HSV
+    hsv = cv2.split(hsv_src)
+    hsv[1] *= sat
+    hsv[2] *= exp
+    hsv[0] += 60 * hue
+    hsv_src = cv2.merge(hsv)
+    img = np.clip(cv2.cvtColor(hsv_src, cv2.COLOR_HSV2RGB), 0, 255)  # HSV to RGB (the same as previous)
+    img = torch.from_numpy(img.transpose((2, 0, 1)))
+    return img
 
 
 def rotate(images, targets):

@@ -13,7 +13,7 @@ from torchvision.datasets import ImageFolder
 import torchvision.transforms as transforms
 
 from tools.plot import xywha2xyxyxyxy
-from tools.augments import vertical_flip, horisontal_flip, rotate, gaussian_noise
+from tools.augments import vertical_flip, horisontal_flip, rotate, gaussian_noise, hsv
 
 
 def pad_to_square(img, pad_value):
@@ -97,8 +97,10 @@ class ListDataset(Dataset):
 
         # Pad to square resolution
         if self.augment:
-            if np.random.random() < 0.3:
+            if np.random.random() < 0.25:
                 img = gaussian_noise(img, 0.0, np.random.random())
+            if np.random.random() < 0.25:
+                img = hsv(img)
         img, pad = pad_to_square(img, 0)
 
         # show image

@@ -3,7 +3,6 @@ import torch
 import numpy as np
 import cv2 as cv
 from tools.utils import xywh2xyxy, xywha2xyxyxyxy
-from model.yololayer import to_cpu
 
 
 def rescale_boxes(boxes, current_dim, original_shape):
@@ -44,7 +43,7 @@ def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None
     img = np.array(cv.imread(img_path))
 
     boxes = rescale_boxes(boxes, img_size, img.shape[:2])
-    boxes = np.array(to_cpu(boxes))
+    boxes = np.array(boxes)
 
     for i in range(len(boxes)):
         box = boxes[i]
@@ -75,13 +74,3 @@ def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None
 
     output_path = str(output_folder) + "/" + img_path.split('/')[-1]
     cv.imwrite(output_path, img)
-
-
-def load_class_names(namesfile):
-    class_names = []
-    with open(namesfile, 'r') as fp:
-        lines = fp.readlines()
-    for line in lines:
-        line = line.rstrip()
-        class_names.append(line)
-    return class_names

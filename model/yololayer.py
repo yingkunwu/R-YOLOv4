@@ -1,7 +1,7 @@
 # References: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/models.py
 
-from model.loss import *
 import numpy as np
+from model.loss import *
 
 
 def to_cpu(tensor):
@@ -25,7 +25,6 @@ def anchor_wh_iou(wh1, wh2):
 class YoloLayer(nn.Module):
     def __init__(self, num_classes, anchors, angles, stride, scale_x_y, ignore_thresh):
         super(YoloLayer, self).__init__()
-        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.num_classes = num_classes
         self.anchors = anchors
         self.angles = angles
@@ -39,7 +38,7 @@ class YoloLayer(nn.Module):
         # as stride = 16 -> [2.25, 4.6875, 4.75, 3.4375, 4.5, 9.125]
         # as stride = 32 -> [4.4375, 3.4375, 6.0, 7.59375, 14.34375, 12.53125]
         # ---------------------------------------------------------------------
-        self.masked_anchors = torch.tensor([(a_w / self.stride, a_h / self.stride, a) for a_w, a_h in self.anchors for a in self.angles], device=self.device)
+        self.masked_anchors = [(a_w / self.stride, a_h / self.stride, a) for a_w, a_h in self.anchors for a in self.angles]
         self.reduction = "mean"
 
         self.lambda_coord = 1.0
@@ -47,28 +46,19 @@ class YoloLayer(nn.Module):
         self.lambda_cls_scale = 1.0
         self.metrics = {}
 
-    def build_targets(self, pred_boxes, pred_cls, target):
-        #ByteTensor = torch.cuda.ByteTensor if pred_boxes.is_cuda else torch.ByteTensor
-        #FloatTensor = torch.cuda.FloatTensor if pred_boxes.is_cuda else torch.FloatTensor
+    def build_targets(self, pred_boxes, pred_cls, target, masked_anchors):
         nB, nA, nG, _, nC = pred_cls.size()
+        device = pred_boxes.device
 
         # Output tensors
-        #obj_mask = ByteTensor(nB, nA, nG, nG).fill_(0)
-        #noobj_mask = ByteTensor(nB, nA, nG, nG).fill_(1)
-        #class_mask = FloatTensor(nB, nA, nG, nG).fill_(0)
-        #iou_scores = FloatTensor(nB, nA, nG, nG).fill_(0)
-        #skew_iou = FloatTensor(nB, nA, nG, nG).fill_(0)
-        #ciou_loss = FloatTensor(nB, nA, nG, nG).fill_(0)
-        #ta = FloatTensor(nB, nA, nG, nG).fill_(0)
-        #tcls = FloatTensor(nB, nA, nG, nG, nC).fill_(0)
-        obj_mask = torch.zeros((nB, nA, nG, nG), dtype=torch.uint8, device=self.device)
-        noobj_mask = torch.ones((nB, nA, nG, nG), dtype=torch.uint8, device=self.device)
-        class_mask = torch.zeros((nB, nA, nG, nG), dtype=torch.float32, device=self.device)
-        iou_scores = torch.zeros((nB, nA, nG, nG), dtype=torch.float32, device=self.device)
-        skew_iou = torch.zeros((nB, nA, nG, nG), dtype=torch.float32, device=self.device)
-        ciou_loss = torch.zeros((nB, nA, nG, nG), dtype=torch.float32, device=self.device)
-        ta = torch.zeros((nB, nA, nG, nG), dtype=torch.float32, device=self.device)
-        tcls = torch.zeros((nB, nA, nG, nG, nC), dtype=torch.float32, device=self.device)
+        obj_mask = torch.zeros((nB, nA, nG, nG), device=device)
+        noobj_mask = torch.ones((nB, nA, nG, nG), device=device)
+        class_mask = torch.zeros((nB, nA, nG, nG), device=device)
+        iou_scores = torch.zeros((nB, nA, nG, nG), device=device)
+        skew_iou = torch.zeros((nB, nA, nG, nG), device=device)
+        ciou_loss = torch.zeros((nB, nA, nG, nG), device=device)
+        ta = torch.zeros((nB, nA, nG, nG), device=device)
+        tcls = torch.zeros((nB, nA, nG, nG, nC), device=device)
 
         # Convert ground truth position to position that relative to the size of box (grid size)
         target_boxes = torch.cat((target[:, 2:6] * nG, target[:, 6:]), dim=-1)
@@ -79,13 +69,14 @@ class YoloLayer(nn.Module):
         # Get anchors with best iou and their angle difference with ground truths
         arious = []
         offset = []
-        for anchor in self.masked_anchors:
-            ariou = anchor_wh_iou(anchor[:2], gwh)
-            cos = torch.abs(torch.cos(torch.sub(anchor[2], ga)))
-            arious.append(ariou * cos)
-            offset.append(torch.abs(torch.sub(anchor[2], ga)))
-        arious = torch.stack(arious)
-        offset = torch.stack(offset)
+        with torch.no_grad():
+            for anchor in masked_anchors:
+                ariou = anchor_wh_iou(anchor[:2], gwh)
+                cos = torch.abs(torch.cos(torch.sub(anchor[2], ga)))
+                arious.append(ariou * cos)
+                offset.append(torch.abs(torch.sub(anchor[2], ga)))
+            arious = torch.stack(arious)
+            offset = torch.stack(offset)
 
         best_ious, best_n = arious.max(0)
 
@@ -104,7 +95,7 @@ class YoloLayer(nn.Module):
             noobj_mask[b[i], (anchor_ious > 0.4) & (angle_offset < (np.pi / 12)), gj[i], gi[i]] = 0
 
         # Angle (encode)
-        ta[b, best_n, gj, gi] = ga - self.masked_anchors[best_n][:, 2]
+        ta[b, best_n, gj, gi] = ga - masked_anchors[best_n][:, 2]
 
         # One-hot encoding of label
         tcls[b, best_n, gj, gi, target_labels] = 1
@@ -117,15 +108,15 @@ class YoloLayer(nn.Module):
             bbox_loss_scale = 2.0 - 1.0 * gwh[:, 0] * gwh[:, 1] / (img_size ** 2)
         ciou = bbox_loss_scale * (1.0 - ciou)
 
-        # Compute label correctness and iou at best anchor
-        class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-        iou_scores[b, best_n, gj, gi] = iou
-
         # magnitude for reg loss
         skew_iou[b, best_n, gj, gi] = torch.exp(1 - iou) - 1
 
         # unit vector for reg loss
         ciou_loss[b, best_n, gj, gi] = ciou
+
+        # Compute label correctness and iou at best anchor
+        class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
+        iou_scores[b, best_n, gj, gi] = iou.detach()
 
         obj_mask = obj_mask.type(torch.bool)
         noobj_mask = noobj_mask.type(torch.bool)
@@ -136,12 +127,9 @@ class YoloLayer(nn.Module):
         # anchors = [12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401]
         # anchor_masks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
         # strides = [8, 16, 32]
-        # anchor_step = len(anchors) // num_anchors
-
-        # Tensors for cuda support
-        #FloatTensor = torch.cuda.FloatTensor if output.is_cuda else torch.FloatTensor
 
         # output.shape-> [batch_size, num_anchors * (num_classes + 5), grid_size, grid_size]
+        device = output.device
         batch_size, grid_size = output.size(0), output.size(2)
 
         # prediction.shape-> torch.Size([1, num_anchors, grid_size, grid_size, num_classes + 5])
@@ -160,18 +148,17 @@ class YoloLayer(nn.Module):
 
         # grid.shape-> [1, 1, 52, 52, 1]
         # 預測出來的(pred_x, pred_y)是相對於每個cell左上角的點，因此這邊需要由左上角往右下角配合grid_size加上對應的offset，畫出的圖才會在正確的位置上
-        grid_x = torch.arange(grid_size, device=self.device).repeat(grid_size, 1).view([1, 1, grid_size, grid_size])
-        grid_y = torch.arange(grid_size, device=self.device).repeat(grid_size, 1).t().view([1, 1, grid_size, grid_size])
+        grid_x = torch.arange(grid_size, device=device).repeat(grid_size, 1).view([1, 1, grid_size, grid_size])
+        grid_y = torch.arange(grid_size, device=device).repeat(grid_size, 1).t().view([1, 1, grid_size, grid_size])
 
         # anchor.shape-> [1, 3, 1, 1, 1]
-        #self.masked_anchors = FloatTensor(self.masked_anchors)
-        anchor_w = self.masked_anchors[:, 0].view([1, self.num_anchors, 1, 1])
-        anchor_h = self.masked_anchors[:, 1].view([1, self.num_anchors, 1, 1])
-        anchor_a = self.masked_anchors[:, 2].view([1, self.num_anchors, 1, 1])
+        masked_anchors = torch.tensor(self.masked_anchors, device=device)
+        anchor_w = masked_anchors[:, 0].view([1, self.num_anchors, 1, 1])
+        anchor_h = masked_anchors[:, 1].view([1, self.num_anchors, 1, 1])
+        anchor_a = masked_anchors[:, 2].view([1, self.num_anchors, 1, 1])
 
         # decode
-        #pred_boxes = FloatTensor(prediction[..., :5].shape)
-        pred_boxes = torch.empty((prediction[..., :5].shape), dtype=torch.float32, device=self.device)
+        pred_boxes = torch.empty((prediction[..., :5].shape), device=device)
         pred_boxes[..., 0] = (pred_x + grid_x)
         pred_boxes[..., 1] = (pred_y + grid_y)
         pred_boxes[..., 2] = (torch.exp(pred_w) * anchor_w)
@@ -191,7 +178,7 @@ class YoloLayer(nn.Module):
             return output, 0
         else:
             iou_scores, skew_iou, ciou_loss, class_mask, obj_mask, noobj_mask, ta, tcls, tconf = self.build_targets(
-                pred_boxes=pred_boxes, pred_cls=pred_cls, target=target
+                pred_boxes=pred_boxes, pred_cls=pred_cls, target=target, masked_anchors=masked_anchors
             )
             # --------------------
             # - Calculating Loss -
@@ -244,4 +231,4 @@ class YoloLayer(nn.Module):
                 "precision": to_cpu(precision).item(),
             }
 
-            return output, total_loss * batch_size
+            return output, total_loss

@@ -1,5 +1,4 @@
 import math
-import matplotlib.pyplot as plt
 import torch
 
 from torch.optim.lr_scheduler import _LRScheduler
@@ -96,6 +95,7 @@ class CosineAnnealingWarmupRestarts(_LRScheduler):
 
 
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
     model = torch.nn.Linear(2, 1)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     lr_sched = CosineAnnealingWarmupRestarts(optimizer,
