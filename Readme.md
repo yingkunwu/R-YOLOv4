@@ -3,6 +3,13 @@
 This is a PyTorch-based R-YOLOv4 implementation which combines YOLOv4 model and loss function from R3Det for arbitrary oriented object detection.
 (Final project for NCKU INTRODUCTION TO ARTIFICIAL INTELLIGENCE course)
 
+### Introduction
+The objective of this project is to provide a capability of oriented object detection for YOLOv4 model. During the model implementation, the most difficult technical challenge that I had ran into is to design a loss function for the model. 
+
+Since I want to add an additional feature for the model, I have to modify the original structure of the model and design a loss function for the modified structure. However, I couldn't find the loss function that is suitable for this structure at first. The result was terrible. The model was either unable to detect objects or unable to predict correct angle of the object. Nevertheless, I tried again and again to address my problem. Every time I failed to get a good result, I reviewed my entire model again, trying to find bugs in my code, and looking for a new plausible loss function by reading lots of paper. 
+
+Finally, I got a successful result by making some adjustments on smooth-L1-IoU loss function proposed by "R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object" to suit my own need. Although the result of my model was not as good as that of others at last, I had acquired a lot of knowledge from the process of solving problem and, more importantly, the result was successful.
+
 ### Dataset
 
 **UCAS-High Resolution Aerial Object Detection Dataset (UCAS-AOD)**
@@ -17,8 +24,8 @@ Though it provides theta for each bounding box, it is not within the angle range
 ---
 #### Loss Function (only for x, y, w, h, theta)
 
-<img src="./images/loss.png" alt="loss" height="90"/>
-<img src="./images/angle.png" alt="angle" height="70"/>
+<img src="https://i.imgur.com/zdA9RJj.png" alt="loss" height="90"/>
+<img src="https://i.imgur.com/Qi1XFXS.png" alt="angle" height="70"/>
 
 I implemented the loss function proposed by [R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object](https://arxiv.org/abs/1908.05612) and made some adjustments for myself.
 
@@ -26,32 +33,35 @@ I implemented the loss function proposed by [R3Det: Refined Single-Stage Detecto
 #### Scheduler
 Cosine Annealing with Warmup (Reference: [Cosine Annealing with Warmup for PyTorch](https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup))
 </br>
-<img src="./images/scheduler.png" alt="scheduler" height="300"/>
+<img src="https://i.imgur.com/qvTnszY.png" alt="scheduler" height="300"/>
 
 ---
+
 #### Recall
 
-<img src="./images/recall.png" alt="recall" height="300"/>
+<img src="https://i.imgur.com/mQf4S1m.png" alt="recall" height="300"/>
 
 As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1**. Therefore I used it for my loss function.
 
 
 ### Usage
 
-1. Clone and install requirements
+1. Clone and Setup Environment
 ```
-$ git clone https://github.com/kkkunnnnethan/R-YOLOv4.git
+$ git clone https://github.com/kunnnnethan/R-YOLOv4.git
 $ cd R-YOLOv4/
+$ python3.8 -m venv (your environment name)
+$ source ~/your-environment-name/bin/activate
+$ pip3 install torch torchvision torchaudio
 $ pip install -r requirements.txt
 ```
 
-2. Download dataset and weights
-
-* Dataset c
-I have  provided some datasets example on my github. Still, you have to download the others by yourself and arrange it in the correct directories like I do.
-* Weights </br>
-[yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY) </br>
-[UCAS-AOD weights](https://drive.google.com/uc?export=download&id=1UDp_DB2gbPSzBIpgAJuLIFqu8hgl57Ip) (weights that I have already trained for this dataset)
+2. Download  weights
+```
+$ ./setup/setup_train.sh
+```
+* Or Download it Manually
+[yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY) 
 
 3. Make sure your files arrangment looks like the following
 ```
@@ -60,27 +70,13 @@ R-YOLOv4/
 ├── test.py
 ├── detect.py
 ├── requirements.txt
-├── model
-    ├── init.py
-    ├── backbone.py
-    ├── neck.py
-    ├── head.py
-    ├── yololayer.py
-    ├── model.py
-    ├── loss.py
-    └── utils.py
-├── tools
-    ├── augments.py
-    ├── load.py
-    ├── logger.py
-    ├── plot.py
-    ├── post_process.py
-    ├── scheduler.py
-    └── utils.py
+├── model/
+├── tools/
+├── outputs/
 ├── weights
-    ├── yolov4.pth (for training)
-    └── AOD_800.pth (for testing and detection)
-├── data
+    ├── pretrained/ (for training)
+    └── UCAS_AOD/ (for testing and detection)
+└── data
     ├── coco.names
     ├── train
         ├── 0
@@ -98,34 +94,32 @@ R-YOLOv4/
             └── ...txt
     └── detect
         └── ...png
-├── outputs
-└── logs
 ```
 
 ### Train
 
 ```
-usage: train.py [-h] [--train_folder TRAIN_FOLDER] [--weights_path WEIGHTS_PATH] [--class_path CLASS_PATH]
-                [--epochs EPOCHS] [--lr LR] [--batch_size BATCH_SIZE] [--subdivisions SUBDIVISIONS]
-                [--img_size IMG_SIZE]
+usage: train.py --model_name YOUR_MODEL_NAME
 ```
 
 ##### Training Log
 ```
-+--------------+--------------------+--------------------+--------------------+--------------------+
-| Step: 1/2000 | loss               | reg_loss           | conf_loss          | cls_loss           |
-+--------------+--------------------+--------------------+--------------------+--------------------+
-| YoloLayer1   | 3.254406690597534  | 0.7356357574462891 | 1.8155715465545654 | 0.7031993269920349 |
-| YoloLayer2   | 3.9455742835998535 | 1.1916611194610596 | 2.0590732097625732 | 0.6948400139808655 |
-| YoloLayer3   | 4.292110919952393  | 1.5909397602081299 | 1.99018132686615   | 0.7109898924827576 |
-+--------------+--------------------+--------------------+--------------------+--------------------+
+---- [Epoch 2/2] ----
++---------------+--------------------+---------------------+---------------------+----------------------+
+| Step: 596/600 | loss               | reg_loss            | conf_loss           | cls_loss             |
++---------------+--------------------+---------------------+---------------------+----------------------+
+| YoloLayer1    | 0.4302629232406616 | 0.32991039752960205 | 0.09135108441114426 | 0.009001442231237888 |
+| YoloLayer2    | 0.7385762333869934 | 0.5682911276817322  | 0.15651139616966248 | 0.013773750513792038 |
+| YoloLayer3    | 1.5002599954605103 | 1.1116538047790527  | 0.36262497305870056 | 0.025981156155467033 |
++---------------+--------------------+---------------------+---------------------+----------------------+
+Total Loss: 2.669099, Runtime: 404.888372
 ```
 
 ##### Tensorboard
 If you would like to use tensorboard for tracking traing process.
 
 * Open additional terminal in the same folder where you are running program.
-* Run command ```$ tensorboard --logdir='logs' --port=6006``` 
+* Run command ```$ tensorboard --logdir='weights/your_model_name/logs' --port=6006``` 
 * Go to [http://localhost:6006/]( http://localhost:6006/)
 
 
@@ -136,33 +130,27 @@ If you would like to use tensorboard for tracking traing process.
 | YOLOv4 (smoothL1-iou) | 97.68 | 90.76 | 94.22|
 
 ```
-usage: test.py [-h] [--test_folder TEST_FOLDER] [--weights_path WEIGHTS_PATH] [--class_path CLASS_PATH]
-               [--conf_thres CONF_THRES] [--nms_thres NMS_THRES] [--iou_thres IOU_THRES] [--batch_size BATCH_SIZE]
-               [--img_size IMG_SIZE]
+usage: test.py --model_name YOUR_MODEL_NAME
 ```
 
 ### Detect
 
 ```
-usage: detect.py [-h] [--image_folder IMAGE_FOLDER] [--output_folder OUTPUT_FOLDER] [--weights_path WEIGHTS_PATH]
-                 [--class_path CLASS_PATH] [--conf_thres CONF_THRES] [--nms_thres NMS_THRES]
-                 [--batch_size BATCH_SIZE] [--img_size IMG_SIZE]
-
+usage: detect.py --model_name YOUR_MODEL_NAME
 ```
 
-<img src="./outputs/P0292.png" alt="car" height="430"/>
-<img src="./outputs/P0259.png" alt="plane" height="413"/>
-
-**Results on other datasets**
-</br>
-<img src="./outputs/new9_864.jpg" alt="car" height="300"/>
-<img src="./outputs/new9_987.jpg" alt="car" height="300"/>
-
+<img src="https://i.imgur.com/UIHJ32m.jpg" alt="car" height="430"/>
+<img src="https://i.imgur.com/XzPuOGn.jpg" alt="plane" height="413"/>
 
 ### References
-[yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection) </br>
-[eriklindernoren/PyTorch-YOLOv3](https://github.com/eriklindernoren/PyTorch-YOLOv3) </br>
+[yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)
+[eriklindernoren/PyTorch-YOLOv3](https://github.com/eriklindernoren/PyTorch-YOLOv3)
 [Tianxiaomo/pytorch-YOLOv4](https://github.com/Tianxiaomo/pytorch-YOLOv4)
+
+### TODO
+
+- [ ] Add weight trained from UCAS-AOD for testing and detection
+- [ ] Mosaic Augmentation
 
 
 ### Credit
