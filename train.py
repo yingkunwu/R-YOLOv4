@@ -34,7 +34,7 @@ class Train:
     def __init__(self, args):
         self.args = args
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model_path = os.path.join("models", self.args.model_name)
+        self.model_path = os.path.join("weights", self.args.model_name)
         self.model = None
         self.logger = None
 
@@ -65,7 +65,7 @@ class Train:
         self.model.apply(weights_init_normal)  # 權重初始化
         self.model.load_state_dict(model_dict)
 
-    def save_model(self, epoch):
+    def save_model(self):
         save_folder = os.path.join(self.model_path, "ryolov4.pth")
         torch.save(self.model.state_dict(), save_folder)
 
@@ -155,7 +155,7 @@ class Train:
 
                 self.log(total_loss, epoch, global_step, total_step, start_time)
         
-            self.save_model(epoch)
+            self.save_model()
             print("Model is saved!")
 
         print("Done!")
