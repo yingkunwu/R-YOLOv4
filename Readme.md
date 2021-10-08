@@ -99,9 +99,7 @@ R-YOLOv4/
 ### Train
 
 ```
-usage: train.py [-h] [--train_folder TRAIN_FOLDER] [--weights_path WEIGHTS_PATH] [--class_path CLASS_PATH]
-                [--epochs EPOCHS] [--lr LR] [--batch_size BATCH_SIZE] [--subdivisions SUBDIVISIONS]
-                [--img_size IMG_SIZE]
+usage: train.py --model_name YOUR_MODEL_NAME
 ```
 
 ##### Training Log
@@ -132,18 +130,13 @@ If you would like to use tensorboard for tracking traing process.
 | YOLOv4 (smoothL1-iou) | 97.68 | 90.76 | 94.22|
 
 ```
-usage: test.py [-h] [--test_folder TEST_FOLDER] [--weights_path WEIGHTS_PATH] [--class_path CLASS_PATH]
-               [--conf_thres CONF_THRES] [--nms_thres NMS_THRES] [--iou_thres IOU_THRES] [--batch_size BATCH_SIZE]
-               [--img_size IMG_SIZE]
+usage: test.py --model_name YOUR_MODEL_NAME
 ```
 
 ### Detect
 
 ```
-usage: detect.py [-h] [--image_folder IMAGE_FOLDER] [--output_folder OUTPUT_FOLDER] [--weights_path WEIGHTS_PATH]
-                 [--class_path CLASS_PATH] [--conf_thres CONF_THRES] [--nms_thres NMS_THRES]
-                 [--batch_size BATCH_SIZE] [--img_size IMG_SIZE]
-
+usage: detect.py --model_name YOUR_MODEL_NAME
 ```
 
 <img src="https://i.imgur.com/UIHJ32m.jpg" alt="car" height="430"/>
