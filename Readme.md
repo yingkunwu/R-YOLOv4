@@ -141,8 +141,8 @@ usage: detect.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--c
                  [--nms_thres NMS_THRES] [--batch_size BATCH_SIZE] [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES]
 ```
 
-<img src="https://i.imgur.com/UIHJ32m.jpg" alt="car" height="430"/>
-<img src="https://i.imgur.com/XzPuOGn.jpg" alt="plane" height="413"/>
+<img src="https://i.imgur.com/31YVWYG.png" alt="car" height="430"/>
+<img src="https://i.imgur.com/5dXrIyI.png" alt="plane" height="413"/>
 
 ### References
 [yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)</br>
