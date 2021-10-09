@@ -56,7 +56,7 @@ $ ./setup/setup.sh
 ```
 * Or Download it Manually
 
-    [yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY)
+    [yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY)</br>
     [weight trained by UCAS_AOD dataset](https://drive.google.com/uc?export=download&id=13LXboG6W7kXWkN7yTeMZ8PKzwcSUZJR2)
 
 
