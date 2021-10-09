@@ -1,0 +1,10 @@
+{
+  "train_path": "data/train",
+  "weights_path": "weights/pretrained/yolov4.pth",
+  "model_name": "test",
+  "epochs": 1,
+  "lr": 0.001,
+  "batch_size": 4,
+  "subdivisions": 4,
+  "img_size": 416
+}

@@ -156,7 +156,7 @@ class Test:
         else:
             assert False, "Model is not exist"
         pretrained_dict = torch.load(weight_path, map_location=torch.device('cpu'))
-        self.model = Yolo(n_classes=2)
+        self.model = Yolo(n_classes=self.args.number_of_classes)
         self.model = self.model.to(self.device)
         self.model.load_state_dict(pretrained_dict)
 

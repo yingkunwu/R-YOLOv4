@@ -216,19 +216,19 @@ def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, mul
     for x, y in dataset.samples:
         classes[int(y)].append(x)
 
-    train_inputs, train_labels = [], []
+    inputs, labels = [], []
 
     for i, data in enumerate(classes):  # 讀取每個類別中所有的檔名 (i: label, data: filename)
 
         for x in data:
-            train_inputs.append(x)
-            train_labels.append(i)
+            inputs.append(x)
+            labels.append(i)
 
-    train_dataset = ListDataset(train_inputs, train_labels, img_size=img_size, augment=augment, multiscale=multiscale)
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle,
-                                                   pin_memory=True, collate_fn=train_dataset.collate_fn)
+    dataset = ListDataset(inputs, labels, img_size=img_size, augment=augment, multiscale=multiscale)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,
+                                                   pin_memory=True, collate_fn=dataset.collate_fn)
 
-    return train_dataset, train_dataloader
+    return dataset, dataloader
 
 
 if __name__ == "__main__":

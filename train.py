@@ -119,7 +119,11 @@ class Train:
         self.save_opts()
         self.logger = Logger(os.path.join(self.model_path, "logs"))
 
-        train_dataset, train_dataloader = split_data(self.args.train_path, self.args.img_size, self.args.batch_size, multiscale=False)
+        augment = False if self.args.no_augmentation else True
+        multiscale = False if self.args.no_multiscale else True
+
+        train_dataset, train_dataloader = split_data(self.args.train_path, self.args.img_size, self.args.batch_size, 
+                                                        augment=augment, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
         scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
