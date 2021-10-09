@@ -4,11 +4,7 @@ This is a PyTorch-based R-YOLOv4 implementation which combines YOLOv4 model and 
 (Final project for NCKU INTRODUCTION TO ARTIFICIAL INTELLIGENCE course)
 
 ### Introduction
-The objective of this project is to provide a capability of oriented object detection for YOLOv4 model. During the model implementation, the most difficult technical challenge that I had ran into is to design a loss function for the model. 
-
-Since I want to add an additional feature for the model, I have to modify the original structure of the model and design a loss function for the modified structure. However, I couldn't find the loss function that is suitable for this structure at first. The result was terrible. The model was either unable to detect objects or unable to predict correct angle of the object. Nevertheless, I tried again and again to address my problem. Every time I failed to get a good result, I reviewed my entire model again, trying to find bugs in my code, and looking for a new plausible loss function by reading lots of paper. 
-
-Finally, I got a successful result by making some adjustments on smooth-L1-IoU loss function proposed by "R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object" to suit my own need. Although the result of my model was not as good as that of others at last, I had acquired a lot of knowledge from the process of solving problem and, more importantly, the result was successful.
+The objective of this project is to provide a capability of oriented object detection for YOLOv4 model. Because of that, modifying the original loss function of bounding boxes for the model is needed. At last, I got a successful result by increasing the number of anchor boxes with rotating angle and combining smooth-L1-IoU loss function proposed by [R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object](https://arxiv.org/abs/1908.05612) into the original loss.
 
 ### Dataset
 
@@ -26,8 +22,6 @@ Though it provides theta for each bounding box, it is not within the angle range
 
 <img src="https://i.imgur.com/zdA9RJj.png" alt="loss" height="90"/>
 <img src="https://i.imgur.com/Qi1XFXS.png" alt="angle" height="70"/>
-
-I implemented the loss function proposed by [R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object](https://arxiv.org/abs/1908.05612) and made some adjustments for myself.
 
 ---
 #### Scheduler
@@ -58,10 +52,13 @@ $ pip install -r requirements.txt
 
 2. Download  weights
 ```
-$ ./setup/setup_train.sh
+$ ./setup/setup.sh
 ```
 * Or Download it Manually
-[yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY) 
+
+    [yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY)</br>
+    [weight trained by UCAS_AOD dataset](https://drive.google.com/uc?export=download&id=13LXboG6W7kXWkN7yTeMZ8PKzwcSUZJR2)
+
 
 3. Make sure your files arrangment looks like the following
 ```
@@ -99,7 +96,9 @@ R-YOLOv4/
 ### Train
 
 ```
-usage: train.py --model_name YOUR_MODEL_NAME
+usage: train.py [-h] [--data_folder DATA_FOLDER] [--weights_path WEIGHTS_PATH] [--model_name MODEL_NAME] [--epochs EPOCHS] [--lr LR]
+                [--batch_size BATCH_SIZE] [--subdivisions SUBDIVISIONS] [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES]
+                [--no_augmentation] [--no_multiscale]
 ```
 
 ##### Training Log
@@ -130,26 +129,28 @@ If you would like to use tensorboard for tracking traing process.
 | YOLOv4 (smoothL1-iou) | 97.68 | 90.76 | 94.22|
 
 ```
-usage: test.py --model_name YOUR_MODEL_NAME
+usage: test.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--class_path CLASS_PATH] [--conf_thres CONF_THRES]
+               [--nms_thres NMS_THRES] [--iou_thres IOU_THRES] [--batch_size BATCH_SIZE] [--img_size IMG_SIZE]
+               [--number_of_classes NUMBER_OF_CLASSES]
 ```
 
 ### Detect
 
 ```
-usage: detect.py --model_name YOUR_MODEL_NAME
+usage: detect.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--class_path CLASS_PATH] [--conf_thres CONF_THRES]
+                 [--nms_thres NMS_THRES] [--batch_size BATCH_SIZE] [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES]
 ```
 
 <img src="https://i.imgur.com/UIHJ32m.jpg" alt="car" height="430"/>
 <img src="https://i.imgur.com/XzPuOGn.jpg" alt="plane" height="413"/>
 
 ### References
-[yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)
-[eriklindernoren/PyTorch-YOLOv3](https://github.com/eriklindernoren/PyTorch-YOLOv3)
+[yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)</br>
+[eriklindernoren/PyTorch-YOLOv3](https://github.com/eriklindernoren/PyTorch-YOLOv3)</br>
 [Tianxiaomo/pytorch-YOLOv4](https://github.com/Tianxiaomo/pytorch-YOLOv4)
 
 ### TODO
 
-- [ ] Add weight trained from UCAS-AOD for testing and detection
 - [ ] Mosaic Augmentation
 
 
