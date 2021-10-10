@@ -142,7 +142,7 @@ usage: detect.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--c
 ```
 
 <img src="https://i.imgur.com/31YVWYG.png" alt="car" height="430"/>
-<img src="https://i.imgur.com/5dXrIyI.png" alt="plane" height="413"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/P0259.png" alt="plane" height="413"/>
 
 ### References
 [yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)</br>
