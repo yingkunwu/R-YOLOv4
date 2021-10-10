@@ -141,8 +141,13 @@ usage: detect.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--c
                  [--nms_thres NMS_THRES] [--batch_size BATCH_SIZE] [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES]
 ```
 
-<img src="https://i.imgur.com/31YVWYG.png" alt="car" height="430"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/P0292.png" alt="car" height="430"/>
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/P0259.png" alt="plane" height="413"/>
+
+**Results from other dataset**
+
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/new9_864.jpg" alt="garbage1" height="430"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/new9_987.jpg" alt="garbage2" height="430"/>
 
 ### References
 [yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)</br>
