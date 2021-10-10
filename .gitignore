@@ -1,8 +1,0 @@
-.git
-.gitignore
-.vscode
-data/
-model/__pycache__
-outputs/
-tools/__pycache__
-weights/
