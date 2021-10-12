@@ -4,7 +4,7 @@ This is a PyTorch-based R-YOLOv4 implementation which combines YOLOv4 model and 
 (Final project for NCKU INTRODUCTION TO ARTIFICIAL INTELLIGENCE course)
 
 ### Introduction
-The objective of this project is to provide a capability of oriented object detection for YOLOv4 model. Because of that, modifying the original loss function of bounding boxes for the model is needed. At last, I got a successful result by increasing the number of anchor boxes with rotating angle and combining smooth-L1-IoU loss function proposed by [R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object](https://arxiv.org/abs/1908.05612) into the original loss.
+The objective of this project is to provide a capability of oriented object detection for YOLOv4 model. As a result, modifying the original loss function of bounding boxes for the model is needed. At last, I got a successful result by increasing the number of anchor boxes with different rotating angle and combining smooth-L1-IoU loss function proposed by [R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object](https://arxiv.org/abs/1908.05612) into the original loss.
 
 ### Dataset
 
