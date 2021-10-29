@@ -223,7 +223,7 @@ def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, mul
             train_labels.append(i)
 
     train_dataset = ListDataset(train_inputs, train_labels, img_size=img_size, augment=augment, multiscale=multiscale)
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle,
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=4,
                                                    pin_memory=True, collate_fn=train_dataset.collate_fn)
 
     return train_dataset, train_dataloader
