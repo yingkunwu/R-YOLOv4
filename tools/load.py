@@ -135,10 +135,6 @@ class ListDataset(Dataset):
                 assert -(np.pi / 2) < t <= (np.pi / 2), "angle: " + str(t)
 
             for i in range(num_targets):
-                #if theta[i] > 0:
-                #    temp1, temp2 = h[i].clone(), w[i].clone()
-                #    w[i], h[i] = temp1, temp2
-                #    theta[i] = theta[i] - np.pi / 2
                 if w[i] < h[i]:
                     temp1, temp2 = h[i].clone(), w[i].clone()
                     w[i], h[i] = temp1, temp2
@@ -232,8 +228,9 @@ def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, mul
 
 
 if __name__ == "__main__":
-    train_dataset, train_dataloader = split_data("data/test_200", 608, multiscale=False)
+    train_dataset, train_dataloader = split_data("../data/test", 608, batch_size=1, multiscale=False)
     for i, (img_path, imgs, targets) in enumerate(train_dataloader):
+        print(imgs.shape)
         img = imgs.squeeze(0).numpy().transpose(1, 2, 0)
         img = img.copy()
         print(img_path)
@@ -241,7 +238,7 @@ if __name__ == "__main__":
         for p in targets:
             x, y, w, h, theta = p[2] * img.shape[1], p[3] * img.shape[1], p[4] * img.shape[1], p[5] * img.shape[1], p[6]
 
-            X1, Y1, X2, Y2, X3, Y3, X4, Y4 = xywha2xyxyxyxy(np.array([x, y, w, h, theta]))
+            X1, Y1, X2, Y2, X3, Y3, X4, Y4 = xywha2xyxyxyxy(torch.tensor([x, y, w, h, theta]))
             X1, Y1, X2, Y2, X3, Y3, X4, Y4 = int(X1), int(Y1), int(X2), int(Y2), int(X3), int(Y3), int(X4), int(Y4)
 
             cv.line(img, (X1, Y1), (X2, Y2), (255, 0, 0), 1)
@@ -249,6 +246,7 @@ if __name__ == "__main__":
             cv.line(img, (X3, Y3), (X4, Y4), (255, 0, 0), 1)
             cv.line(img, (X4, Y4), (X1, Y1), (255, 0, 0), 1)
 
+        print(img.shape)
         cv.imshow('My Image', img)
         img[:, 1:] = img[:, 1:] * 255.0
         if img_path[0].split('/')[-2] == str(1):

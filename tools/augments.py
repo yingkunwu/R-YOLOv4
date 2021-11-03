@@ -100,7 +100,7 @@ def rotate(images, targets):
 
 
 def vertical_flip(images, targets):
-    images = torch.flip(images, [0, 1])
+    images = torch.flip(images, [1])
     targets[:, 3] = 1 - targets[:, 3]
     targets[:, 6] = - targets[:, 6]
 
