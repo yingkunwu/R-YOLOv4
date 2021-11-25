@@ -11,7 +11,7 @@ The objective of this project is to provide a capability of oriented object dete
 **UCAS-High Resolution Aerial Object Detection Dataset (UCAS-AOD)**
 
 Label: x1, y1, x2, y2, x3, y3, x4, y4, theta, x, y, width, height </br>
-(x1, y1) is the coordinate located on the upper left of the bounding box, and then (x2, y2), (x3, y3) and (x4, y4) following the clockwise order respectively.
+(x1, y1) is the coordinate located on the upper left of the bounding box; (x2, y2), (x3, y3) and (x4, y4) are the rest of the bounding box corners following the clockwise order.
 
 Though it provides theta for each bounding box, it is not within the angle range that I want. You can check out how I calculated the angle that I need in tools/load.py.
 
@@ -152,11 +152,12 @@ usage: detect.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--c
 ### References
 [yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)</br>
 [eriklindernoren/PyTorch-YOLOv3](https://github.com/eriklindernoren/PyTorch-YOLOv3)</br>
-[Tianxiaomo/pytorch-YOLOv4](https://github.com/Tianxiaomo/pytorch-YOLOv4)
+[Tianxiaomo/pytorch-YOLOv4](https://github.com/Tianxiaomo/pytorch-YOLOv4)</br>
+[ultralytics/yolov5](https://github.com/ultralytics/yolov5/tree/master/utils)
 
 ### TODO
 
-- [ ] Mosaic Augmentation
+- [x] Mosaic Augmentation
 
 
 ### Credit
