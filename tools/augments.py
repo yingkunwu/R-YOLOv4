@@ -85,22 +85,12 @@ def rotate(images, targets):
     targets[:, 6] = targets[:, 6] - radian
     targets[:, 6][targets[:, 6] <= -np.pi / 2] = targets[:, 6][targets[:, 6] <= -np.pi / 2] + np.pi
 
-    #for t in targets:
-    #    if t[6] > 0:
-    #        temp1, temp2 = t[4].clone(), t[5].clone()
-    #        t[5], t[4] = temp1, temp2
-    #        t[6] = t[6] - np.pi / 2
-    #    elif t[6] <= -np.pi / 2:
-    #        temp1, temp2 = t[4].clone(), t[5].clone()
-    #        t[5], t[4] = temp1, temp2
-    #        t[6] = t[6] + np.pi / 2
-
     assert (-np.pi / 2 < targets[:, 6]).all() or (targets[:, 6] <= np.pi / 2).all()
     return images, targets
 
 
 def vertical_flip(images, targets):
-    images = torch.flip(images, [0, 1])
+    images = torch.flip(images, [1])
     targets[:, 3] = 1 - targets[:, 3]
     targets[:, 6] = - targets[:, 6]
 

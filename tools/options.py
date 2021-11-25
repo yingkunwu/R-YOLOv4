@@ -13,6 +13,7 @@ class TrainOptions:
         self.parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
         self.parser.add_argument("--number_of_classes", type=int, default=2, help="number of your output classes")
         self.parser.add_argument("--no_augmentation", action="store_true", help="if set, disable data augmentation in training")
+        self.parser.add_argument("--no_mosaic", action="store_true", help="if set, disable mosaic data augmentation in training")
         self.parser.add_argument("--no_multiscale", action="store_true", help="if set, disable multiscale data in training")
 
     def parse(self):

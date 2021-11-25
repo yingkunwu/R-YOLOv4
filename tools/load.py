@@ -12,8 +12,8 @@ from torch.utils.data import Dataset
 from torchvision.datasets import ImageFolder
 import torchvision.transforms as transforms
 
-from tools.plot import xywha2xyxyxyxy
-from tools.augments import vertical_flip, horisontal_flip, rotate, gaussian_noise, hsv
+from plot import xywha2xyxyxyxy
+from augments import vertical_flip, horisontal_flip, rotate, gaussian_noise, hsv
 
 
 def pad_to_square(img, pad_value):
@@ -60,7 +60,7 @@ class ImageDataset(Dataset):
 
 
 class ListDataset(Dataset):
-    def __init__(self, list_path, labels, img_size=416, augment=True, multiscale=True, normalized_labels=False):
+    def __init__(self, list_path, labels, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
         self.img_files = list_path
 
         self.label_files = [
@@ -71,6 +71,8 @@ class ListDataset(Dataset):
         self.labels = labels
         self.max_objects = 100
         self.augment = augment
+        self.mosaic = mosaic
+        self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.multiscale = multiscale
         self.normalized_labels = normalized_labels
         self.min_size = self.img_size - 3 * 32
@@ -79,9 +81,49 @@ class ListDataset(Dataset):
 
     def __getitem__(self, index):
 
-        # ---------
-        #  Image
-        # ---------
+        if self.mosaic and np.random.random() < 0.5:
+            img, targets = self.load_mosaic(index)
+
+        else:
+            img, (h, w) = self.load_image(index)
+            img, pad = pad_to_square(img, 0)
+
+            original_h, original_w = (h, w) if self.normalized_labels else (1, 1)
+            _, padded_h, padded_w = img.shape
+
+            targets = self.load_target(index, original_h, original_w, pad, padded_h, padded_w)
+
+        # Apply augmentations
+        if self.augment:
+            if np.random.random() < 0.5:
+                img, targets = rotate(img, targets)
+            if np.random.random() < 0.5:
+                img, targets = horisontal_flip(img, targets)
+            if np.random.random() < 0.5:
+                img, targets = vertical_flip(img, targets)
+
+        return self.img_files[index], img, targets
+
+    def collate_fn(self, batch):
+        paths, imgs, targets = list(zip(*batch))
+        # Remove empty placeholder targets
+        targets = [boxes for boxes in targets if boxes is not None]
+        # Add sample index to targets
+        for i, boxes in enumerate(targets):
+            boxes[:, 0] = i
+        targets = torch.cat(targets, 0)
+        # Selects new image size every tenth batch
+        if self.multiscale and self.batch_count % 10 == 0:
+            self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
+        # Resize images to input shape
+        imgs = torch.stack([resize(img, self.img_size) for img in imgs])
+        self.batch_count += 1
+        return paths, imgs, targets
+
+    def __len__(self):
+        return len(self.img_files)
+
+    def load_image(self, index):
         img_path = self.img_files[index]
 
         # Extract image as PyTorch tensor
@@ -93,26 +135,69 @@ class ListDataset(Dataset):
             img = img.expand((3, img.shape[1:]))
 
         _, h, w = img.shape
-        h_factor, w_factor = (h, w) if self.normalized_labels else (1, 1)
 
-        # Pad to square resolution
         if self.augment:
             if np.random.random() < 0.25:
                 img = gaussian_noise(img, 0.0, np.random.random())
             if np.random.random() < 0.25:
                 img = hsv(img)
-        img, pad = pad_to_square(img, 0)
 
-        # show image
-        # transform = transforms.ToPILImage(mode="RGB")
-        # image = transform(img)
-        # image.show()
+        return img, (h, w)
 
-        _, padded_h, padded_w = img.shape
+    def load_mosaic(self, index):
+        """
+        Loads 1 image + 3 random images into a 4-image mosaic
+        """
 
-        # ---------
-        #  Label
-        # ---------
+        labels4 = []
+        s = self.img_size
+        yc, xc = [int(random.uniform(-x, 2 * s + x)) for x in self.mosaic_border]  # mosaic center x, y
+        indices = [index] + [random.randint(0, len(self.labels) - 1) for _ in range(3)]  # 3 additional image indices
+        random.shuffle(indices)
+
+        padded_h, padded_w = s * 2, s * 2
+
+        for i, index in enumerate(indices):
+            # Load image
+            img, (h, w) = self.load_image(index)
+            original_h, original_w = (h, w) if self.normalized_labels else (1, 1)
+
+            # place img in img4
+            if i == 0:  # top left
+                img4 = torch.zeros((img.shape[0], padded_h, padded_w))
+                x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
+                x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
+                padw = xc - x2b
+                padh = yc - y2b
+            elif i == 1:  # top right
+                x1a, y1a, x2a, y2a = xc, max(yc - h, 0), min(xc + w, s * 2), yc
+                x1b, y1b, x2b, y2b = 0, h - (y2a - y1a), min(w, x2a - x1a), h
+                padw = xc
+                padh = yc - y2b
+            elif i == 2:  # bottom left
+                x1a, y1a, x2a, y2a = max(xc - w, 0), yc, xc, min(s * 2, yc + h)
+                x1b, y1b, x2b, y2b = w - (x2a - x1a), 0, w, min(y2a - y1a, h)
+                padw = xc - x2b
+                padh = yc
+            elif i == 3:  # bottom right
+                x1a, y1a, x2a, y2a = xc, yc, min(xc + w, s * 2), min(s * 2, yc + h)
+                x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(y2a - y1a, h)
+                padw = xc
+                padh = yc
+
+            img4[:, y1a:y2a, x1a:x2a] = img[:, y1b:y2b, x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
+
+            # Labels
+            targets = self.load_target(index, original_h, original_w, (padw, padw, padh, padh), padded_h, padded_w, mosaic=True)
+            labels4.append(targets)
+
+        # Concat labels
+        if len(labels4):
+            labels4 = torch.cat(labels4, 0)
+
+        return img4, labels4
+
+    def load_target(self, index, original_h, original_w, pad, padded_h, padded_w, mosaic=False):
         label_path = self.label_files[index % len(self.img_files)].rstrip()
 
         if os.path.exists(label_path):
@@ -135,10 +220,6 @@ class ListDataset(Dataset):
                 assert -(np.pi / 2) < t <= (np.pi / 2), "angle: " + str(t)
 
             for i in range(num_targets):
-                #if theta[i] > 0:
-                #    temp1, temp2 = h[i].clone(), w[i].clone()
-                #    w[i], h[i] = temp1, temp2
-                #    theta[i] = theta[i] - np.pi / 2
                 if w[i] < h[i]:
                     temp1, temp2 = h[i].clone(), w[i].clone()
                     w[i], h[i] = temp1, temp2
@@ -149,10 +230,10 @@ class ListDataset(Dataset):
             assert (-np.pi / 2 < theta).all() or (theta <= np.pi / 2).all()
 
             # Extract coordinates for unpadded + unscaled image
-            x1 = w_factor * (x - w / 2)
-            y1 = h_factor * (y - h / 2)
-            x2 = w_factor * (x + w / 2)
-            y2 = h_factor * (y + h / 2)
+            x1 = original_w * (x - w / 2)
+            y1 = original_h * (y - h / 2)
+            x2 = original_w * (x + w / 2)
+            y2 = original_h * (y + h / 2)
 
             # Adjust for added padding
             x1 += pad[0]
@@ -163,8 +244,8 @@ class ListDataset(Dataset):
             # Returns (x, y, w, h)
             x = ((x1 + x2) / 2) / padded_w
             y = ((y1 + y2) / 2) / padded_h
-            w *= w_factor / padded_w
-            h *= h_factor / padded_h
+            w *= original_w / padded_w
+            h *= original_h / padded_h
 
             targets = torch.zeros((len(boxes), 7))
             targets[:, 1] = label
@@ -173,42 +254,26 @@ class ListDataset(Dataset):
             targets[:, 4] = w
             targets[:, 5] = h
             targets[:, 6] = theta
+
+            if mosaic:
+                mask = torch.ones_like(targets[:, 1])
+                mask = torch.logical_and(mask, targets[:, 2] > 0)
+                mask = torch.logical_and(mask, targets[:, 2] < 1)
+                mask = torch.logical_and(mask, targets[:, 3] > 0)
+                mask = torch.logical_and(mask, targets[:, 3] < 1)
+
+                return targets[mask]
+            else:
+                return targets
+
+
         else:
-            targets = torch.zeros((1, 7))
-            targets[:, 1] = -1
-            return img_path, img, targets
-
-        # Apply augmentations
-        if self.augment:
-            if np.random.random() < 0.5:
-                img, targets = rotate(img, targets)
-            if np.random.random() < 0.5:
-                img, targets = horisontal_flip(img, targets)
-            if np.random.random() < 0.5:
-                img, targets = vertical_flip(img, targets)
-        return img_path, img, targets
-
-    def collate_fn(self, batch):
-        paths, imgs, targets = list(zip(*batch))
-        # Remove empty placeholder targets
-        targets = [boxes for boxes in targets if boxes is not None]
-        # Add sample index to targets
-        for i, boxes in enumerate(targets):
-            boxes[:, 0] = i
-        targets = torch.cat(targets, 0)
-        # Selects new image size every tenth batch
-        if self.multiscale and self.batch_count % 10 == 0:
-            self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
-        # Resize images to input shape
-        imgs = torch.stack([resize(img, self.img_size) for img in imgs])
-        self.batch_count += 1
-        return paths, imgs, targets
-
-    def __len__(self):
-        return len(self.img_files)
+            print(label_path)
+            assert False, "Label file not found"
 
 
-def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, multiscale=True):
+
+def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, mosaic=True, multiscale=True):
     dataset = ImageFolder(data_dir)
 
     classes = [[] for _ in range(len(dataset.classes))]
@@ -224,7 +289,7 @@ def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, mul
             inputs.append(x)
             labels.append(i)
 
-    dataset = ListDataset(inputs, labels, img_size=img_size, augment=augment, multiscale=multiscale)
+    dataset = ListDataset(inputs, labels, img_size=img_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,
                                                    pin_memory=True, collate_fn=dataset.collate_fn)
 
@@ -232,22 +297,23 @@ def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, mul
 
 
 if __name__ == "__main__":
-    train_dataset, train_dataloader = split_data("data/test_200", 608, multiscale=False)
+    train_dataset, train_dataloader = split_data("data/test", 608, batch_size=1, multiscale=False)
     for i, (img_path, imgs, targets) in enumerate(train_dataloader):
         img = imgs.squeeze(0).numpy().transpose(1, 2, 0)
         img = img.copy()
-        print(img_path)
 
         for p in targets:
             x, y, w, h, theta = p[2] * img.shape[1], p[3] * img.shape[1], p[4] * img.shape[1], p[5] * img.shape[1], p[6]
 
-            X1, Y1, X2, Y2, X3, Y3, X4, Y4 = xywha2xyxyxyxy(np.array([x, y, w, h, theta]))
+            X1, Y1, X2, Y2, X3, Y3, X4, Y4 = xywha2xyxyxyxy(torch.tensor([x, y, w, h, theta]))
             X1, Y1, X2, Y2, X3, Y3, X4, Y4 = int(X1), int(Y1), int(X2), int(Y2), int(X3), int(Y3), int(X4), int(Y4)
 
             cv.line(img, (X1, Y1), (X2, Y2), (255, 0, 0), 1)
             cv.line(img, (X2, Y2), (X3, Y3), (255, 0, 0), 1)
             cv.line(img, (X3, Y3), (X4, Y4), (255, 0, 0), 1)
             cv.line(img, (X4, Y4), (X1, Y1), (255, 0, 0), 1)
+
+        img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
 
         cv.imshow('My Image', img)
         img[:, 1:] = img[:, 1:] * 255.0

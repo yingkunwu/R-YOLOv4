@@ -120,10 +120,11 @@ class Train:
         self.logger = Logger(os.path.join(self.model_path, "logs"))
 
         augment = False if self.args.no_augmentation else True
+        mosaic = False if self.args.no_mosaic else True
         multiscale = False if self.args.no_multiscale else True
 
         train_dataset, train_dataloader = split_data(self.args.data_folder, self.args.img_size, self.args.batch_size, 
-                                                        augment=augment, multiscale=multiscale)
+                                                        augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
         scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
