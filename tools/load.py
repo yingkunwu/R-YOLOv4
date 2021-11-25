@@ -298,7 +298,9 @@ def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, mos
 
 if __name__ == "__main__":
     train_dataset, train_dataloader = split_data("data/test", 608, batch_size=1, multiscale=False)
+
     for i, (img_path, imgs, targets) in enumerate(train_dataloader):
+        print(imgs.shape)
         img = imgs.squeeze(0).numpy().transpose(1, 2, 0)
         img = img.copy()
 

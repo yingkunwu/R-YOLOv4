@@ -4,7 +4,7 @@ This is a PyTorch-based R-YOLOv4 implementation which combines YOLOv4 model and 
 (Final project for NCKU INTRODUCTION TO ARTIFICIAL INTELLIGENCE course)
 
 ### Introduction
-The objective of this project is to provide a capability of oriented object detection for YOLOv4 model. Because of that, modifying the original loss function of bounding boxes for the model is needed. At last, I got a successful result by increasing the number of anchor boxes with rotating angle and combining smooth-L1-IoU loss function proposed by [R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object](https://arxiv.org/abs/1908.05612) into the original loss.
+The objective of this project is to provide a capability of oriented object detection for YOLOv4 model. As a result, modifying the original loss function of bounding boxes for the model is needed. At last, I got a successful result by increasing the number of anchor boxes with different rotating angle and combining smooth-L1-IoU loss function proposed by [R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object](https://arxiv.org/abs/1908.05612) into the original loss.
 
 ### Dataset
 
@@ -141,8 +141,13 @@ usage: detect.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--c
                  [--nms_thres NMS_THRES] [--batch_size BATCH_SIZE] [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES]
 ```
 
-<img src="https://i.imgur.com/31YVWYG.png" alt="car" height="430"/>
-<img src="https://i.imgur.com/5dXrIyI.png" alt="plane" height="413"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/P0292.png" alt="car" height="430"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/P0259.png" alt="plane" height="413"/>
+
+**Results from other dataset**
+
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/new9_864.jpg" alt="garbage1" height="430"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/new9_987.jpg" alt="garbage2" height="430"/>
 
 ### References
 [yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)</br>
