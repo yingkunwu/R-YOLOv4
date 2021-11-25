@@ -2,7 +2,7 @@ import math
 import torch
 import numpy as np
 import cv2 as cv
-from utils import xywh2xyxy, xywha2xyxyxyxy
+from tools.utils import xywh2xyxy, xywha2xyxyxyxy
 
 
 def rescale_boxes(boxes, current_dim, original_shape):

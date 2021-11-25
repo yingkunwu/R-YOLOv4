@@ -12,8 +12,8 @@ from torch.utils.data import Dataset
 from torchvision.datasets import ImageFolder
 import torchvision.transforms as transforms
 
-from plot import xywha2xyxyxyxy
-from augments import vertical_flip, horisontal_flip, rotate, gaussian_noise, hsv
+from tools.plot import xywha2xyxyxyxy
+from tools.augments import vertical_flip, horisontal_flip, rotate, gaussian_noise, hsv
 
 
 def pad_to_square(img, pad_value):
@@ -300,7 +300,6 @@ if __name__ == "__main__":
     train_dataset, train_dataloader = split_data("data/test", 608, batch_size=1, multiscale=False)
 
     for i, (img_path, imgs, targets) in enumerate(train_dataloader):
-        print(imgs.shape)
         img = imgs.squeeze(0).numpy().transpose(1, 2, 0)
         img = img.copy()
 
