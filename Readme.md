@@ -13,7 +13,7 @@ The objective of this project is to provide a capability of oriented object dete
 Label: x1, y1, x2, y2, x3, y3, x4, y4, theta, x, y, width, height </br>
 (x1, y1) is the coordinate located on the upper left of the bounding box; (x2, y2), (x3, y3) and (x4, y4) are the rest of the bounding box corners following the clockwise order.
 
-Though it provides theta for each bounding box, it is not within the angle range that I want. You can check out how I calculated the angle that I need in tools/load.py.
+Though it provides theta for each bounding box, it is not within the angle range that I want. You can check out how I calculated the angle that I need in [tools/load.py](https://github.com/kunnnnethan/R-YOLOv4/blob/bc106d5d4963a3085e8b88eb162b64d44e92abc3/tools/load.py).
 
 ### Features
 
