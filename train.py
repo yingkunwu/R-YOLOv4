@@ -6,6 +6,7 @@ import os
 import shutil
 import json
 from terminaltables import AsciiTable
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 from model.model import Yolo
 from tools.load import split_data
@@ -131,18 +132,20 @@ class Train:
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
         scheduler = CosineAnnealingWarmupRestarts(optimizer,
-                                                first_cycle_steps=scheduler_iters,
-                                                cycle_mult=1.0,
+                                                first_cycle_steps=round(scheduler_iters / 2),
                                                 max_lr=self.args.lr,
-                                                min_lr=0,
+                                                min_lr=1e-5,
                                                 warmup_steps=round(scheduler_iters * 0.1),
-                                                gamma=1.0)
+                                                cycle_mult=1,
+                                                gamma=1)
 
         start_time = time.time()
         self.model.train()
         for epoch in range(self.args.epochs):
 
             for batch, (_, imgs, targets) in enumerate(train_dataloader):
+                if len(targets) == 0:
+                    continue
 
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
