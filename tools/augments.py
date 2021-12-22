@@ -39,11 +39,11 @@ def hsv(img):
 
     img = img.numpy().transpose((1, 2, 0))
     hsv_src = cv2.cvtColor(img.astype(np.float32), cv2.COLOR_RGB2HSV)  # RGB to HSV
-    hsv = cv2.split(hsv_src)
-    hsv[1] *= sat
-    hsv[2] *= exp
-    hsv[0] += 60 * hue
-    hsv_src = cv2.merge(hsv)
+    (B, G, R) = cv2.split(hsv_src)
+    B *= sat
+    G *= exp
+    R += 60 * hue
+    hsv_src = cv2.merge([B, G, R])
     img = np.clip(cv2.cvtColor(hsv_src, cv2.COLOR_HSV2RGB), 0, 255)  # HSV to RGB (the same as previous)
     img = torch.from_numpy(img.transpose((2, 0, 1)))
     return img
