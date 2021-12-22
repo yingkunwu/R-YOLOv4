@@ -35,7 +35,7 @@ class Detect:
         self.model.load_state_dict(pretrained_dict)
 
     def save_results(self, imgs, boxes):
-        save_folder = os.path.join("outputs", self.args.model_name)
+        save_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs", self.args.model_name)
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
         for i, (img_path, box) in enumerate(zip(imgs, boxes)):
