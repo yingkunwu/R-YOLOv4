@@ -2,6 +2,7 @@ import math
 import torch
 import numpy as np
 import cv2 as cv
+import os
 from tools.utils import xywh2xyxy, xywha2xyxyxyxy
 
 
@@ -72,5 +73,5 @@ def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None
         img = cv.putText(img, class_names[cls_id] + ":" + str(round(box[5] * box[6], 2)),
                          (X1, Y1), cv.FONT_HERSHEY_SIMPLEX, 0.6, rgb, 1)
 
-    output_path = str(output_folder) + "/" + img_path.split('/')[-1]
+    output_path = os.path.join(output_folder, img_path.split('/')[-1])
     cv.imwrite(output_path, img)
