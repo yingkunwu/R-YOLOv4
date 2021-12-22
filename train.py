@@ -6,7 +6,6 @@ import os
 import shutil
 import json
 from terminaltables import AsciiTable
-from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 from model.model import Yolo
 from tools.load import split_data
