@@ -60,7 +60,7 @@ class ImageDataset(Dataset):
 
 
 class ListDataset(Dataset):
-    def __init__(self, list_path, labels, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
+    def __init__(self, list_path, labels, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False, custom=False):
         self.img_files = list_path
 
         self.label_files = [
@@ -75,6 +75,7 @@ class ListDataset(Dataset):
         self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.multiscale = multiscale
         self.normalized_labels = normalized_labels
+        self.custom = custom
         self.min_size = self.img_size - 3 * 32
         self.max_size = self.img_size + 3 * 32
         self.batch_count = 0
@@ -152,7 +153,7 @@ class ListDataset(Dataset):
         labels4 = []
         s = self.img_size
         yc, xc = [int(random.uniform(-x, 2 * s + x)) for x in self.mosaic_border]  # mosaic center x, y
-        indices = [index] + [random.randint(0, len(self.labels) - 1) for _ in range(3)]  # 3 additional image indices
+        indices = [index] + [random.randint(0, len(self.img_files) - 1) for _ in range(3)]  # 3 additional image indices
         random.shuffle(indices)
 
         padded_h, padded_w = s * 2, s * 2
@@ -201,33 +202,60 @@ class ListDataset(Dataset):
         label_path = self.label_files[index % len(self.img_files)].rstrip()
 
         if os.path.exists(label_path):
-            boxes = torch.from_numpy(np.loadtxt(label_path).reshape(-1, 13))
-            label = torch.from_numpy(np.array(self.labels[index]))
+            if self.custom:
+                boxes = torch.from_numpy(np.loadtxt(label_path).reshape(-1, 6))
+                num_targets = len(boxes)
 
-            x1, y1, x2, y2, x3, y3, x4, y4 = \
-                boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3], boxes[:, 4], boxes[:, 5], boxes[:, 6], boxes[:, 7]
+                x, y, w, h, theta, label = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3], boxes[:, 4], boxes[:, 5]
+                temp_theta = []
+                for t in theta:
+                    if t > np.pi / 2:
+                        t = t - np.pi
+                    elif t <= -(np.pi / 2):
+                        t = t + np.pi
+                    temp_theta.append(t)
 
-            num_targets = len(boxes)
-            x = ((x1 + x3) / 2 + (x2 + x4) / 2) / 2
-            y = ((y1 + y3) / 2 + (y2 + y4) / 2) / 2
-            w = torch.sqrt(torch.pow((x1 - x2), 2) + torch.pow((y1 - y2), 2))
-            h = torch.sqrt(torch.pow((x2 - x3), 2) + torch.pow((y2 - y3), 2))
+                theta = torch.stack(temp_theta)
+                assert (-np.pi / 2 < theta).all() or (theta <= np.pi / 2).all()
 
-            theta = ((y2 - y1) / (x2 - x1 + 1e-16) + (y3 - y4) / (x3 - x4 + 1e-16)) / 2
-            theta = torch.atan(theta)
-            theta = torch.stack([t if t != -(np.pi / 2) else t + np.pi for t in theta])
-            for t in theta:
-                assert -(np.pi / 2) < t <= (np.pi / 2), "angle: " + str(t)
+                for i in range(num_targets):
+                    if w[i] < h[i]:
+                        temp1, temp2 = h[i].clone(), w[i].clone()
+                        w[i], h[i] = temp1, temp2
+                        if theta[i] > 0:
+                            theta[i] = theta[i] - np.pi / 2
+                        else:
+                            theta[i] = theta[i] + np.pi / 2
+                assert (-np.pi / 2 < theta).all() or (theta <= np.pi / 2).all()
 
-            for i in range(num_targets):
-                if w[i] < h[i]:
-                    temp1, temp2 = h[i].clone(), w[i].clone()
-                    w[i], h[i] = temp1, temp2
-                    if theta[i] > 0:
-                        theta[i] = theta[i] - np.pi / 2
-                    else:
-                        theta[i] = theta[i] + np.pi / 2
-            assert (-np.pi / 2 < theta).all() or (theta <= np.pi / 2).all()
+            else:
+                boxes = torch.from_numpy(np.loadtxt(label_path).reshape(-1, 13))
+                label = torch.from_numpy(np.array(self.labels[index]))
+
+                x1, y1, x2, y2, x3, y3, x4, y4 = \
+                    boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3], boxes[:, 4], boxes[:, 5], boxes[:, 6], boxes[:, 7]
+
+                num_targets = len(boxes)
+                x = ((x1 + x3) / 2 + (x2 + x4) / 2) / 2
+                y = ((y1 + y3) / 2 + (y2 + y4) / 2) / 2
+                w = torch.sqrt(torch.pow((x1 - x2), 2) + torch.pow((y1 - y2), 2))
+                h = torch.sqrt(torch.pow((x2 - x3), 2) + torch.pow((y2 - y3), 2))
+
+                theta = ((y2 - y1) / (x2 - x1 + 1e-16) + (y3 - y4) / (x3 - x4 + 1e-16)) / 2
+                theta = torch.atan(theta)
+                theta = torch.stack([t if t != -(np.pi / 2) else t + np.pi for t in theta])
+                for t in theta:
+                    assert -(np.pi / 2) < t <= (np.pi / 2), "angle: " + str(t)
+
+                for i in range(num_targets):
+                    if w[i] < h[i]:
+                        temp1, temp2 = h[i].clone(), w[i].clone()
+                        w[i], h[i] = temp1, temp2
+                        if theta[i] > 0:
+                            theta[i] = theta[i] - np.pi / 2
+                        else:
+                            theta[i] = theta[i] + np.pi / 2
+                assert (-np.pi / 2 < theta).all() or (theta <= np.pi / 2).all()
 
             # Extract coordinates for unpadded + unscaled image
             x1 = original_w * (x - w / 2)
@@ -272,24 +300,28 @@ class ListDataset(Dataset):
             assert False, "Label file not found"
 
 
+def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, mosaic=True, multiscale=True, custom=False):
+    if custom:
+        inputs = sorted(glob.glob(os.path.join(data_dir, "*.jpg")))
+        labels = None
+    
+    else:
+        dataset = ImageFolder(data_dir)
 
-def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, mosaic=True, multiscale=True):
-    dataset = ImageFolder(data_dir)
+        classes = [[] for _ in range(len(dataset.classes))]
 
-    classes = [[] for _ in range(len(dataset.classes))]
+        for x, y in dataset.samples:
+            classes[int(y)].append(x)
 
-    for x, y in dataset.samples:
-        classes[int(y)].append(x)
+        inputs, labels = [], []
 
-    inputs, labels = [], []
+        for i, data in enumerate(classes):  # 讀取每個類別中所有的檔名 (i: label, data: filename)
 
-    for i, data in enumerate(classes):  # 讀取每個類別中所有的檔名 (i: label, data: filename)
+            for x in data:
+                inputs.append(x)
+                labels.append(i)
 
-        for x in data:
-            inputs.append(x)
-            labels.append(i)
-
-    dataset = ListDataset(inputs, labels, img_size=img_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
+    dataset = ListDataset(inputs, labels, img_size=img_size, augment=augment, mosaic=mosaic, multiscale=multiscale, custom=custom)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle,
                                                    pin_memory=True, collate_fn=dataset.collate_fn)
 

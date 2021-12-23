@@ -178,7 +178,7 @@ class Test:
 
         # Get dataloader
         test_dataset, test_dataloader = split_data(self.args.data_folder, self.args.img_size, self.args.batch_size,
-                                                    shuffle=False, augment=False, multiscale=False)
+                                                    shuffle=False, augment=False, mosaic=False, multiscale=False, custom=self.args.custom_dataset)
 
         print("Compute mAP...")
 
