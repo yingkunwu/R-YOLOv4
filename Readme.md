@@ -167,6 +167,7 @@ usage: detect.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--c
 ### TODO
 
 - [x] Mosaic Augmentation
+- [ ] Cutout Augmentation
 
 
 ### Credit
