@@ -96,12 +96,21 @@ R-YOLOv4/
 ### Train
 
 ```
-usage: train.py [-h] [--data_folder DATA_FOLDER] [--weights_path WEIGHTS_PATH] [--model_name MODEL_NAME] [--epochs EPOCHS] [--lr LR]
-                [--batch_size BATCH_SIZE] [--subdivisions SUBDIVISIONS] [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES]
-                [--no_augmentation] [--no_multiscale]
+usage: train.py [-h] [--data_folder DATA_FOLDER] [--weights_path WEIGHTS_PATH] [--model_name MODEL_NAME]
+                [--epochs EPOCHS] [--lr LR] [--batch_size BATCH_SIZE] [--subdivisions SUBDIVISIONS]
+                [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES] [--no_augmentation] [--no_mosaic]
+                [--no_multiscale] [--custom_dataset]
 ```
 
-##### Training Log
+#### Training with custom dataset
+1. If you want to train your custom dataset, you can use [labelImg2](https://github.com/chinakook/labelImg2) to help label your data. labelImg2 is capable of labeling rotated objects.
+2. Afterwards, convert produced files into txt files and make sure your label format in txt files is the same as [x, y, w, h, angle, label]. 
+3. Finally, add the --custom_dataset flag when training. For example:
+```
+python train.py --model_name my_model --custom_dataset
+```
+
+#### Training Log
 ```
 ---- [Epoch 2/2] ----
 +---------------+--------------------+---------------------+---------------------+----------------------+
@@ -114,7 +123,7 @@ usage: train.py [-h] [--data_folder DATA_FOLDER] [--weights_path WEIGHTS_PATH] [
 Total Loss: 2.669099, Runtime: 404.888372
 ```
 
-##### Tensorboard
+#### Tensorboard
 If you would like to use tensorboard for tracking traing process.
 
 * Open additional terminal in the same folder where you are running program.
@@ -129,9 +138,9 @@ If you would like to use tensorboard for tracking traing process.
 | YOLOv4 (smoothL1-iou) | 97.68 | 90.76 | 94.22|
 
 ```
-usage: test.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--class_path CLASS_PATH] [--conf_thres CONF_THRES]
-               [--nms_thres NMS_THRES] [--iou_thres IOU_THRES] [--batch_size BATCH_SIZE] [--img_size IMG_SIZE]
-               [--number_of_classes NUMBER_OF_CLASSES]
+usage: test.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--class_path CLASS_PATH]
+               [--conf_thres CONF_THRES] [--nms_thres NMS_THRES] [--iou_thres IOU_THRES] [--batch_size BATCH_SIZE]
+               [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES] [--custom_dataset]
 ```
 
 ### Detect
