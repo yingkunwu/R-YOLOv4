@@ -102,11 +102,10 @@ usage: train.py [-h] [--data_folder DATA_FOLDER] [--weights_path WEIGHTS_PATH] [
                 [--no_multiscale] [--custom_dataset]
 ```
 
-If you want to train your custom dataset, which has the different label form from UCAS-AOD dataset, you can add the --custom_dataset flag when training. For example:
+If you want to train your custom dataset, you can use [labelImg2](https://github.com/chinakook/labelImg2) to help label your data. labelImg2 is capable of labeling rotated objects. Afterwards, convert produced files into txt files and make sure your label format in txt files is the same as [x, y, w, h, angle, label]. Finally, add the --custom_dataset flag when training. For example:
 ```
 python train.py --model_name my_model --custom_dataset
 ```
-Note that the label form of your data should be the same as [x, y, w, h, angle, label]. 
 
 ##### Training Log
 ```
