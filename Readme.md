@@ -103,9 +103,9 @@ usage: train.py [-h] [--data_folder DATA_FOLDER] [--weights_path WEIGHTS_PATH] [
 ```
 
 If you want to train your custom dataset, which has the different label form from UCAS-AOD dataset, you can add the --custom_dataset flag when training. For example:
-'''
+```
 python train.py --model_name my_model --custom_dataset
-'''
+```
 Note that the label form of your data should be the same as [x, y, w, h, angle, label]. 
 
 ##### Training Log
