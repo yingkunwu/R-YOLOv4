@@ -102,7 +102,7 @@ usage: train.py [-h] [--data_folder DATA_FOLDER] [--weights_path WEIGHTS_PATH] [
                 [--no_multiscale] [--custom_dataset]
 ```
 
-##### Training with custom dataset
+#### Training with custom dataset
 1. If you want to train your custom dataset, you can use [labelImg2](https://github.com/chinakook/labelImg2) to help label your data. labelImg2 is capable of labeling rotated objects.
 2. Afterwards, convert produced files into txt files and make sure your label format in txt files is the same as [x, y, w, h, angle, label]. 
 3. Finally, add the --custom_dataset flag when training. For example:
@@ -110,7 +110,7 @@ usage: train.py [-h] [--data_folder DATA_FOLDER] [--weights_path WEIGHTS_PATH] [
 python train.py --model_name my_model --custom_dataset
 ```
 
-##### Training Log
+#### Training Log
 ```
 ---- [Epoch 2/2] ----
 +---------------+--------------------+---------------------+---------------------+----------------------+
@@ -123,7 +123,7 @@ python train.py --model_name my_model --custom_dataset
 Total Loss: 2.669099, Runtime: 404.888372
 ```
 
-##### Tensorboard
+#### Tensorboard
 If you would like to use tensorboard for tracking traing process.
 
 * Open additional terminal in the same folder where you are running program.
