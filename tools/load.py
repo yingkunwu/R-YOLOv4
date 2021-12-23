@@ -89,10 +89,10 @@ class ListDataset(Dataset):
             img, (h, w) = self.load_image(index)
             img, pad = pad_to_square(img, 0)
 
-            original_h, original_w = (h, w) if self.normalized_labels else (1, 1)
+            h_factor, w_factor = (h, w) if self.normalized_labels else (1, 1)
             _, padded_h, padded_w = img.shape
 
-            targets = self.load_target(index, original_h, original_w, pad, padded_h, padded_w)
+            targets = self.load_target(index, h_factor, w_factor, pad, padded_h, padded_w)
 
         # Apply augmentations
         if self.augment:
@@ -138,10 +138,8 @@ class ListDataset(Dataset):
         _, h, w = img.shape
 
         if self.augment:
-            if np.random.random() < 0.25:
-                img = gaussian_noise(img, 0.0, np.random.random())
-            if np.random.random() < 0.25:
-                img = hsv(img)
+            img = gaussian_noise(img, 0.0, np.random.random())
+            img = hsv(img)
 
         return img, (h, w)
 
@@ -161,7 +159,7 @@ class ListDataset(Dataset):
         for i, index in enumerate(indices):
             # Load image
             img, (h, w) = self.load_image(index)
-            original_h, original_w = (h, w) if self.normalized_labels else (1, 1)
+            h_factor, w_factor = (h, w) if self.normalized_labels else (1, 1)
 
             # place img in img4
             if i == 0:  # top left
@@ -189,7 +187,7 @@ class ListDataset(Dataset):
             img4[:, y1a:y2a, x1a:x2a] = img[:, y1b:y2b, x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
 
             # Labels
-            targets = self.load_target(index, original_h, original_w, (padw, padw, padh, padh), padded_h, padded_w, mosaic=True)
+            targets = self.load_target(index, h_factor, w_factor, (padw, padw, padh, padh), padded_h, padded_w, mosaic=True)
             labels4.append(targets)
 
         # Concat labels
@@ -198,7 +196,7 @@ class ListDataset(Dataset):
 
         return img4, labels4
 
-    def load_target(self, index, original_h, original_w, pad, padded_h, padded_w, mosaic=False):
+    def load_target(self, index, h_factor, w_factor, pad, padded_h, padded_w, mosaic=False):
         label_path = self.label_files[index % len(self.img_files)].rstrip()
 
         if os.path.exists(label_path):
@@ -258,10 +256,10 @@ class ListDataset(Dataset):
                 assert (-np.pi / 2 < theta).all() or (theta <= np.pi / 2).all()
 
             # Extract coordinates for unpadded + unscaled image
-            x1 = original_w * (x - w / 2)
-            y1 = original_h * (y - h / 2)
-            x2 = original_w * (x + w / 2)
-            y2 = original_h * (y + h / 2)
+            x1 = w_factor * (x - w / 2)
+            y1 = h_factor * (y - h / 2)
+            x2 = w_factor * (x + w / 2)
+            y2 = h_factor * (y + h / 2)
 
             # Adjust for added padding
             x1 += pad[0]
@@ -272,8 +270,8 @@ class ListDataset(Dataset):
             # Returns (x, y, w, h)
             x = ((x1 + x2) / 2) / padded_w
             y = ((y1 + y2) / 2) / padded_h
-            w *= original_w / padded_w
-            h *= original_h / padded_h
+            w *= w_factor / padded_w
+            h *= h_factor / padded_h
 
             targets = torch.zeros((len(boxes), 7))
             targets[:, 1] = label
