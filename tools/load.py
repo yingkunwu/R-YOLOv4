@@ -11,9 +11,10 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 from torchvision.datasets import ImageFolder
 import torchvision.transforms as transforms
+import albumentations as T
 
 from tools.plot import xywha2xyxyxyxy
-from tools.augments import vertical_flip, horisontal_flip, rotate, gaussian_noise, hsv
+from tools.augments import vertical_flip, horisontal_flip, rotate, hsv, mixup
 
 
 def pad_to_square(img, pad_value):
@@ -69,7 +70,6 @@ class ListDataset(Dataset):
         ]
         self.img_size = img_size
         self.labels = labels
-        self.max_objects = 100
         self.augment = augment
         self.mosaic = mosaic
         self.mosaic_border = [-img_size // 2, -img_size // 2]
@@ -82,17 +82,22 @@ class ListDataset(Dataset):
 
     def __getitem__(self, index):
 
-        if self.mosaic and np.random.random() < 0.5:
+        if self.mosaic:
             img, targets = self.load_mosaic(index)
+            if np.random.random() < 0.1:
+                img2, targets2 = self.load_mosaic(index)
+                img, targets = mixup(img, targets, img2, targets2)
+            img = transforms.ToTensor()(img)
 
         else:
             img, (h, w) = self.load_image(index)
+            img = transforms.ToTensor()(img)
             img, pad = pad_to_square(img, 0)
 
-            h_factor, w_factor = (h, w) if self.normalized_labels else (1, 1)
+            original_h, original_w = (h, w) if self.normalized_labels else (1, 1)
             _, padded_h, padded_w = img.shape
 
-            targets = self.load_target(index, h_factor, w_factor, pad, padded_h, padded_w)
+            targets = self.load_target(index, original_h, original_w, pad, padded_h, padded_w)
 
         # Apply augmentations
         if self.augment:
@@ -128,18 +133,22 @@ class ListDataset(Dataset):
         img_path = self.img_files[index]
 
         # Extract image as PyTorch tensor
-        img = transforms.ToTensor()(Image.open(img_path).convert('RGB'))
-
+        img = np.array(Image.open(img_path).convert('RGB'))
+        h, w, c = img.shape
+        
         # Handle images with less than three channels
-        if len(img.shape) != 3:
-            img = img.unsqueeze(0)
-            img = img.expand((3, img.shape[1:]))
+        if c != 3:
+            img = np.transpose(np.stack(np.array([img, img, img])), (1, 2, 0))
 
-        _, h, w = img.shape
+        transform = T.Compose([
+                        T.GaussNoise(var_limit=100, p=1.0),
+                        T.MedianBlur(p=0.01),
+                        T.CLAHE(p=0.01),
+                    ])
 
         if self.augment:
-            img = gaussian_noise(img, 0.0, np.random.random())
-            img = hsv(img)
+            img = transform(image=img)["image"]
+            hsv(img)
 
         return img, (h, w)
 
@@ -163,7 +172,7 @@ class ListDataset(Dataset):
 
             # place img in img4
             if i == 0:  # top left
-                img4 = torch.zeros((img.shape[0], padded_h, padded_w))
+                img4 = np.zeros((padded_h, padded_w, img.shape[2]), dtype=np.uint8)
                 x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
                 x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
                 padw = xc - x2b
@@ -184,7 +193,7 @@ class ListDataset(Dataset):
                 padw = xc
                 padh = yc
 
-            img4[:, y1a:y2a, x1a:x2a] = img[:, y1b:y2b, x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
+            img4[y1a:y2a, x1a:x2a, :] = img[y1b:y2b, x1b:x2b, :]  # img4[ymin:ymax, xmin:xmax]
 
             # Labels
             targets = self.load_target(index, h_factor, w_factor, (padw, padw, padh, padh), padded_h, padded_w, mosaic=True)
@@ -327,11 +336,11 @@ def split_data(data_dir, img_size, batch_size=4, shuffle=True, augment=True, mos
 
 
 if __name__ == "__main__":
-    train_dataset, train_dataloader = split_data("data/test", 608, batch_size=1, multiscale=False)
+    train_dataset, train_dataloader = split_data("data/test", 608, batch_size=1, mosaic=True, multiscale=False, custom=False)
 
     for i, (img_path, imgs, targets) in enumerate(train_dataloader):
         img = imgs.squeeze(0).numpy().transpose(1, 2, 0)
-        img = img.copy()
+        img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
 
         for p in targets:
             x, y, w, h, theta = p[2] * img.shape[1], p[3] * img.shape[1], p[4] * img.shape[1], p[5] * img.shape[1], p[6]
@@ -344,14 +353,12 @@ if __name__ == "__main__":
             cv.line(img, (X3, Y3), (X4, Y4), (255, 0, 0), 1)
             cv.line(img, (X4, Y4), (X1, Y1), (255, 0, 0), 1)
 
-        img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
-
-        cv.imshow('My Image', img)
         img[:, 1:] = img[:, 1:] * 255.0
         if img_path[0].split('/')[-2] == str(1):
-            path = "data/augmentation/plane_" + img_path[0].split('/')[-1]
+            path = "data/plane_" + img_path[0].split('/')[-1]
         else:
-            path = "data/augmentation/car_" + img_path[0].split('/')[-1]
+            path = "data/car_" + img_path[0].split('/')[-1]
         cv.imwrite(path, img)
-        cv.waitKey(0)
-        cv.destroyAllWindows()
+        #cv.imshow('My Image', img)
+        #cv.waitKey(0)
+        #cv.destroyAllWindows()

@@ -131,7 +131,7 @@ class Train:
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
         scheduler = CosineAnnealingWarmupRestarts(optimizer,
-                                                first_cycle_steps=round(scheduler_iters / 2),
+                                                first_cycle_steps=round(scheduler_iters),
                                                 max_lr=self.args.lr,
                                                 min_lr=1e-5,
                                                 warmup_steps=round(scheduler_iters * 0.1),
