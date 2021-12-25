@@ -94,10 +94,10 @@ class ListDataset(Dataset):
             img = transforms.ToTensor()(img)
             img, pad = pad_to_square(img, 0)
 
-            original_h, original_w = (h, w) if self.normalized_labels else (1, 1)
+            h_factor, w_factor = (h, w) if self.normalized_labels else (1, 1)
             _, padded_h, padded_w = img.shape
 
-            targets = self.load_target(index, original_h, original_w, pad, padded_h, padded_w)
+            targets = self.load_target(index, h_factor, w_factor, pad, padded_h, padded_w)
 
         # Apply augmentations
         if self.augment:
