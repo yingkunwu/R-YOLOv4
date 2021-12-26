@@ -11,10 +11,9 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 from torchvision.datasets import ImageFolder
 import torchvision.transforms as transforms
-import albumentations as T
 
 from tools.plot import xywha2xyxyxyxy
-from tools.augments import vertical_flip, horisontal_flip, rotate, hsv, mixup
+from tools.augments import vertical_flip, horisontal_flip, rotate, hsv, gaussian_noise, mixup
 
 
 def pad_to_square(img, pad_value):
@@ -140,14 +139,8 @@ class ListDataset(Dataset):
         if c != 3:
             img = np.transpose(np.stack(np.array([img, img, img])), (1, 2, 0))
 
-        transform = T.Compose([
-                        T.GaussNoise(var_limit=100, p=1.0),
-                        T.MedianBlur(p=0.01),
-                        T.CLAHE(p=0.01),
-                    ])
-
         if self.augment:
-            img = transform(image=img)["image"]
+            #img = gaussian_noise(img) # np.random.normal(mean, var ** 0.5, image.shape) would increase run time significantly
             hsv(img)
 
         return img, (h, w)

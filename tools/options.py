@@ -9,7 +9,7 @@ class TrainOptions:
         self.parser.add_argument("--epochs", type=int, default=50, help="number of epochs")
         self.parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
         self.parser.add_argument("--batch_size", type=int, default=2, help="size of batches")
-        self.parser.add_argument("--subdivisions", type=int, default=8, help="size of mini batches")
+        self.parser.add_argument("--subdivisions", type=int, default=4, help="size of mini batches")
         self.parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
         self.parser.add_argument("--number_of_classes", type=int, default=2, help="number of your output classes")
         self.parser.add_argument("--no_augmentation", action="store_true", help="if set, disable data augmentation in training")

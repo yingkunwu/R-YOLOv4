@@ -1,7 +1,6 @@
 numpy
 Pillow
-#opencv-contrib-python-headless
-albumentations
+opencv-contrib-python-headless
 tensorboard
 terminaltables
 tqdm

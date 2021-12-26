@@ -5,6 +5,15 @@ import cv2
 import torch.nn.functional as F
 
 
+def gaussian_noise(image, mean=0, var=100.0):
+    var = random.uniform(0, var)
+    noise = np.random.normal(mean, var ** 0.5, image.shape)
+    image = image.astype("float32")
+    out = image + noise
+    out = np.clip(out, 0.0, 255.0)
+    return out.astype(np.uint8)
+
+
 def hsv(img, hgain=0.015, sgain=0.7, vgain=0.4):
     # HSV color-space augmentation
     if hgain or sgain or vgain:
