@@ -45,11 +45,11 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
     $ git clone https://github.com/kunnnnethan/R-YOLOv4.git
     $ cd R-YOLOv4/
     ```
-    **Create Conda Environment**
+    Create Conda Environment
     ```
     $ conda env create -f environment.yml
     ```
-    **Python Virtual Environment**
+    Python Virtual Environment
     ```
     $ python3.8 -m venv (your environment name)
     $ source ~/your-environment-name/bin/activate
@@ -59,11 +59,11 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
 
 2. Download  weights
 
-    **Download from Shell**
+    Download from Shell
     ```
     $ ./setup/setup.sh
     ```
-    **Download from Google Drives**</br>
+    Download from Google Drives</br>
     [yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY)</br>
     [weight trained by UCAS_AOD dataset](https://drive.google.com/uc?export=download&id=13LXboG6W7kXWkN7yTeMZ8PKzwcSUZJR2)
 
@@ -113,9 +113,9 @@ usage: train.py [-h] [--data_folder DATA_FOLDER] [--weights_path WEIGHTS_PATH] [
 1. If you want to train your custom dataset, you can use [labelImg2](https://github.com/chinakook/labelImg2) to help label your data. labelImg2 is capable of labeling rotated objects.
 2. Afterwards, convert produced files into txt files and make sure your label format in txt files is the same as [x, y, w, h, angle, label]. An example is given at [here](data/custom_dataset_label_example.txt).
 3. Finally, add the --custom_dataset flag when training. For example:
-```
-python train.py --model_name my_model --custom_dataset
-```
+    ```
+    python train.py --model_name my_model --custom_dataset
+    ```
 
 #### Training Log
 ```
