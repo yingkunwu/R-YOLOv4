@@ -45,27 +45,27 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
     $ git clone https://github.com/kunnnnethan/R-YOLOv4.git
     $ cd R-YOLOv4/
     ```
-    * Create Conda Environment
-        ```
-        $ conda env create -f environment.yml
-        ```
-    * Python Virtual Environment
-        ```
-        $ python3.8 -m venv (your environment name)
-        $ source ~/your-environment-name/bin/activate
-        $ pip3 install torch torchvision torchaudio
-        $ pip install -r requirements.txt
-        ```
+    **Create Conda Environment**
+    ```
+    $ conda env create -f environment.yml
+    ```
+    **Python Virtual Environment**
+    ```
+    $ python3.8 -m venv (your environment name)
+    $ source ~/your-environment-name/bin/activate
+    $ pip3 install torch torchvision torchaudio
+    $ pip install -r requirements.txt
+    ```
 
 2. Download  weights
 
-    * Download from Shell
-        ```
-        $ ./setup/setup.sh
-        ```
-    * Download from Google Drives
-        [yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY)</br>
-        [weight trained by UCAS_AOD dataset](https://drive.google.com/uc?export=download&id=13LXboG6W7kXWkN7yTeMZ8PKzwcSUZJR2)
+    **Download from Shell**
+    ```
+    $ ./setup/setup.sh
+    ```
+    **Download from Google Drives**</br>
+    [yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY)</br>
+    [weight trained by UCAS_AOD dataset](https://drive.google.com/uc?export=download&id=13LXboG6W7kXWkN7yTeMZ8PKzwcSUZJR2)
 
 3. Make sure your files arrangment looks like the following
     ```
