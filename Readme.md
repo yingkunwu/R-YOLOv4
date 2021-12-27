@@ -58,13 +58,12 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
     ```
 
 2. Download  weights
-    
+
     **Download from Shell**
     ```
     $ ./setup/setup.sh
     ```
-    **Download from Google Drives**
-    
+    **Download from Google Drives**</br>
     [yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY)</br>
     [weight trained by UCAS_AOD dataset](https://drive.google.com/uc?export=download&id=13LXboG6W7kXWkN7yTeMZ8PKzwcSUZJR2)
 
