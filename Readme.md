@@ -41,26 +41,26 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
 ### Usage
 
 1. Clone and Setup Environment
-```
-$ git clone https://github.com/kunnnnethan/R-YOLOv4.git
-$ cd R-YOLOv4/
-```
-**Create Conda Environment**
-```
-$ conda env create -f environment.yml
-```
-**Python Virtual Environment**
-```
-$ python3.8 -m venv (your environment name)
-$ source ~/your-environment-name/bin/activate
-$ pip3 install torch torchvision torchaudio
-$ pip install -r requirements.txt
-```
+    ```
+    $ git clone https://github.com/kunnnnethan/R-YOLOv4.git
+    $ cd R-YOLOv4/
+    ```
+    **Create Conda Environment**
+    ```
+    $ conda env create -f environment.yml
+    ```
+    **Python Virtual Environment**
+    ```
+    $ python3.8 -m venv (your environment name)
+    $ source ~/your-environment-name/bin/activate
+    $ pip3 install torch torchvision torchaudio
+    $ pip install -r requirements.txt
+    ```
 
 2. Download  weights
-```
-$ ./setup/setup.sh
-```
+    ```
+    $ ./setup/setup.sh
+    ```
 * Or Download it Manually
 
     [yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY)</br>
@@ -68,37 +68,37 @@ $ ./setup/setup.sh
 
 
 3. Make sure your files arrangment looks like the following
-```
-R-YOLOv4/
-├── train.py
-├── test.py
-├── detect.py
-├── requirements.txt
-├── model/
-├── tools/
-├── outputs/
-├── weights
-    ├── pretrained/ (for training)
-    └── UCAS_AOD/ (for testing and detection)
-└── data
-    ├── coco.names
-    ├── train
-        ├── 0
-            ├── ...png
-            └── ...txt
-        └── 1
-            ├── ...png
-            └── ...txt
-    ├── test
-        ├── 0
-            ├── ...png
-            └── ...txt
-        └── 1
-            ├── ...png
-            └── ...txt
-    └── detect
-        └── ...png
-```
+    ```
+    R-YOLOv4/
+    ├── train.py
+    ├── test.py
+    ├── detect.py
+    ├── requirements.txt
+    ├── model/
+    ├── tools/
+    ├── outputs/
+    ├── weights
+        ├── pretrained/ (for training)
+        └── UCAS_AOD/ (for testing and detection)
+    └── data
+        ├── coco.names
+        ├── train
+            ├── 0
+                ├── ...png
+                └── ...txt
+            └── 1
+                ├── ...png
+                └── ...txt
+        ├── test
+            ├── 0
+                ├── ...png
+                └── ...txt
+            └── 1
+                ├── ...png
+                └── ...txt
+        └── detect
+            └── ...png
+    ```
 
 ### Train
 
