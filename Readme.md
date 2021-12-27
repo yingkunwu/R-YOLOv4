@@ -49,7 +49,7 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
     ```
     $ conda env create -f environment.yml
     ```
-    Python Virtual Environment
+    Create Python Virtual Environment
     ```
     $ python3.8 -m venv (your environment name)
     $ source ~/your-environment-name/bin/activate
