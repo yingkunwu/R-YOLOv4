@@ -64,8 +64,7 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
     $ ./setup/setup.sh
     ```
     Download from Google Drives</br>
-    [yolov4 pretrained weights](https://drive.google.com/uc?export=download&id=1sVD2d_y9VDirA-XOdcVDKCDrQw3e7ZJY)</br>
-    [weight trained by UCAS_AOD dataset](https://drive.google.com/uc?export=download&id=13LXboG6W7kXWkN7yTeMZ8PKzwcSUZJR2)
+    [weights](https://drive.google.com/uc?export=download&id=1qi-EWYPGJjZ_CkYh1LatDgfMSfQ0aqhk)
 
 3. Make sure your files arrangment looks like the following
     ```
