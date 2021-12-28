@@ -61,7 +61,8 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
 
     Download from Shell
     ```
-    $ ./setup/setup.sh
+    $ chmod +x ./setup.sh
+    $ ./setup.sh
     ```
     Download from Google Drives</br>
     [weights](https://drive.google.com/uc?export=download&id=1qi-EWYPGJjZ_CkYh1LatDgfMSfQ0aqhk)
