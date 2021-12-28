@@ -142,7 +142,7 @@ If you would like to use tensorboard for tracking traing process.
 
 | Method | Plane | Car | mAP |
 | -------- | -------- | -------- | -------- |
-| YOLOv4 (smoothL1-iou) | 97.68 | 90.76 | 94.22|
+| YOLOv4 (smoothL1-iou) | 98.05 | 92.05 | 95.05|
 
 ```
 usage: test.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--class_path CLASS_PATH]
