@@ -7,11 +7,11 @@ import shutil
 import json
 from terminaltables import AsciiTable
 
-from model.model import Yolo
-from tools.load import split_data
-from tools.scheduler import CosineAnnealingWarmupRestarts
-from tools.logger import *
-from tools.options import TrainOptions
+from model.yolo import Yolo
+from load import split_data
+from utils.scheduler import CosineAnnealingWarmupRestarts
+from utils.logger import *
+from utils.options import TrainOptions
 
 
 def weights_init_normal(m):

@@ -74,13 +74,3 @@ def skewiou(box1, box2):
         union = g.area + p.area - inter
         iou.append(torch.tensor(inter / (union + 1e-16)))
     return torch.stack(iou)
-
-
-def load_class_names(namesfile):
-    class_names = []
-    with open(namesfile, 'r') as fp:
-        lines = fp.readlines()
-    for line in lines:
-        line = line.rstrip()
-        class_names.append(line)
-    return class_names

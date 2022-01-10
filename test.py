@@ -5,11 +5,11 @@ import tqdm
 import glob
 from terminaltables import AsciiTable
 
-from tools.options import TestOptions
-from tools.post_process import post_process
-from tools.utils import load_class_names, skewiou
-from tools.load import split_data
-from model.model import Yolo
+from utils.options import TestOptions
+from utils.post_process import post_process
+from utils.geometry import load_class_names, skewiou
+from load import split_data
+from model.yolo import Yolo
 
 # Reference: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/detect.py
 

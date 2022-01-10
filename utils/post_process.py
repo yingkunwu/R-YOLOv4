@@ -1,5 +1,5 @@
 import torch
-from tools.utils import skewiou
+from utils.geometry import skewiou
 
 
 def post_process(prediction, conf_thres=0.5, nms_thres=0.4):
