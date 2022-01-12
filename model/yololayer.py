@@ -183,24 +183,25 @@ class YoloLayer(nn.Module):
             # --------------------
             # - Calculating Loss -
             # --------------------
-
-            # Reg Loss for bounding box prediction
-            iou_const = skew_iou[obj_mask]
-            angle_loss = F.smooth_l1_loss(pred_a[obj_mask], ta[obj_mask], reduction="none")
-            reg_loss = angle_loss + ciou_loss[obj_mask]
-            with torch.no_grad():
-                reg_const = iou_const / reg_loss
-            reg_loss = (reg_loss * reg_const).mean()
-
-            # Focal Loss for object's prediction
+            reg_loss, conf_loss, cls_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
             FOCAL = FocalLoss(reduction=self.reduction)
-            conf_loss = (
-                    FOCAL(pred_conf[obj_mask], tconf[obj_mask])
-                    + FOCAL(pred_conf[noobj_mask], tconf[noobj_mask])
-            )
 
-            # Binary Cross Entropy Loss for class' prediction
-            cls_loss = F.binary_cross_entropy(pred_cls[obj_mask], tcls[obj_mask], reduction=self.reduction)
+            if len(target) > 0:
+                # Reg Loss for bounding box prediction
+                iou_const = skew_iou[obj_mask]
+                angle_loss = F.smooth_l1_loss(pred_a[obj_mask], ta[obj_mask], reduction="none")
+                reg_vector = angle_loss + ciou_loss[obj_mask]
+                with torch.no_grad():
+                    reg_magnitude = iou_const / reg_vector
+                reg_loss += (reg_magnitude * reg_vector).mean()
+
+                # Focal Loss for object's prediction
+                conf_loss += FOCAL(pred_conf[obj_mask], tconf[obj_mask])
+
+                # Binary Cross Entropy Loss for class' prediction
+                cls_loss += F.binary_cross_entropy(pred_cls[obj_mask], tcls[obj_mask], reduction=self.reduction)
+
+            conf_loss += FOCAL(pred_conf[noobj_mask], tconf[noobj_mask])
 
             # Loss scaling
             reg_loss = self.lambda_coord * reg_loss

@@ -60,12 +60,7 @@ class ImageDataset(Dataset):
 class BaseDataset(Dataset):
     def __init__(self, img_files, labels, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
         self.img_files = img_files
-        self.label_files = [
-            path.replace(".png", ".txt").replace(".jpg", ".txt")
-            for path in self.img_files
-        ]
-        print(self.img_files)
-        print(self.label_files)
+        self.label_files = None
         self.img_size = img_size
         self.labels = labels
         self.augment = augment

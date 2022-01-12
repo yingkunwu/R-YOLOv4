@@ -1,5 +1,28 @@
 import torch
-from utils.geometry import skewiou
+import cv2 as cv
+import numpy as np
+from shapely.geometry import Polygon
+
+
+def rbox2polygon(box):
+    x, y, w, h, theta = np.array(box)
+    points = cv.boxPoints(((x, y), (w, h), theta / np.pi * 180))
+    return Polygon(points)
+
+
+def skewiou(box1, box2):
+    assert len(box1) == 5 and len(box2[0]) == 5
+    iou = []
+    g = rbox2polygon(box1)
+    for i in range(len(box2)):
+        p = rbox2polygon(box2[i])
+        if not g.is_valid or not p.is_valid:
+            print("something went wrong in skew iou")
+            return 0
+        inter = g.intersection(p).area
+        union = g.area + p.area - inter
+        iou.append(torch.tensor(inter / (union + 1e-16)))
+    return torch.stack(iou)
 
 
 def post_process(prediction, conf_thres=0.5, nms_thres=0.4):

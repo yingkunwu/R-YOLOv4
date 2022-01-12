@@ -1,9 +1,16 @@
 import math
-import torch
 import numpy as np
 import cv2 as cv
 import os
-from utils.geometry import xywh2xyxy, xywha2xyxyxyxy
+
+
+def xywh2xyxy(x):
+    y = x.new(x.shape)
+    y[..., 0] = x[..., 0] - x[..., 2] / 2
+    y[..., 1] = x[..., 1] - x[..., 3] / 2
+    y[..., 2] = x[..., 0] + x[..., 2] / 2
+    y[..., 3] = x[..., 1] + x[..., 3] / 2
+    return y
 
 
 def rescale_boxes(boxes, current_dim, original_shape):
@@ -50,10 +57,8 @@ def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None
         box = boxes[i]
         x, y, w, h, theta = box[0], box[1], box[2], box[3], box[4]
 
-        X1, Y1, X2, Y2, X3, Y3, X4, Y4 = xywha2xyxyxyxy(torch.tensor([x, y, w, h, theta]))
-        X1, Y1, X2, Y2, X3, Y3, X4, Y4 = int(X1), int(Y1), int(X2), int(Y2), int(X3), int(Y3), int(X4), int(Y4)
-
-        bbox = np.int0([(X1, Y1), (X2, Y2), (X3, Y3), (X4, Y4)])
+        bbox = cv.boxPoints(((x, y), (w, h), theta / np.pi * 180))
+        bbox = np.int0(bbox)
         cv.drawContours(img, [bbox], 0, (0, 255, 0), 2)
 
         if color:
@@ -71,7 +76,7 @@ def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None
             rgb = (red, green, blue)
 
         img = cv.putText(img, class_names[cls_id] + ":" + str(round(box[5] * box[6], 2)),
-                         (X1, Y1), cv.FONT_HERSHEY_SIMPLEX, 0.6, rgb, 1)
+                         bbox[0], cv.FONT_HERSHEY_SIMPLEX, 0.6, rgb, 1)
 
     output_path = os.path.join(output_folder, os.path.split(img_path)[-1])
     cv.imwrite(output_path, img)

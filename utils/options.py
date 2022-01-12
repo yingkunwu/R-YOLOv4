@@ -3,9 +3,9 @@ import argparse
 class TrainOptions:
     def __init__(self):
         self.parser = argparse.ArgumentParser()
-        self.parser.add_argument("--data_folder", type=str, default="data/train_900", help="path to train dataset")
+        self.parser.add_argument("--data_folder", type=str, default="data/trash_train", help="path to train dataset")
         self.parser.add_argument("--weights_path", type=str, default="weights/pretrained/yolov4.pth", help="path to pretrained weights file")
-        self.parser.add_argument("--model_name", type=str, default="ryolov4", help="new model name")
+        self.parser.add_argument("--model_name", type=str, default="custom", help="new model name")
         self.parser.add_argument("--epochs", type=int, default=50, help="number of epochs")
         self.parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
         self.parser.add_argument("--batch_size", type=int, default=2, help="size of batches")
@@ -15,7 +15,7 @@ class TrainOptions:
         self.parser.add_argument("--no_augmentation", action="store_true", help="if set, disable data augmentation in training")
         self.parser.add_argument("--no_mosaic", action="store_true", help="if set, disable mosaic data augmentation in training")
         self.parser.add_argument("--no_multiscale", action="store_true", help="if set, disable multiscale data in training")
-        self.parser.add_argument("--custom_dataset", action="store_true", help="if set, using custom dataset to train the model; your data should be labeled as the following form in the txt files: [x, y, w, h, angle, label]")
+        self.parser.add_argument("--dataset", type=str, default="custom", choices=["UCAS_AOD", "DOTA", "custom"], help="specify dataset to use for training")
 
     def parse(self):
         return self.parser.parse_args()
@@ -32,7 +32,7 @@ class TestOptions:
         self.parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
         self.parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
         self.parser.add_argument("--number_of_classes", type=int, default=2, help="number of your output classes")
-        self.parser.add_argument("--custom_dataset", action="store_true", help="if set, using custom dataset to train the model; your data should be labeled as the following form in the txt files: [x, y, w, h, angle, label]")
+        self.parser.add_argument("--dataset", type=str, default="custom", choices=["UCAS_AOD", "DOTA", "custom"], help="specify dataset to use for testing")
 
 
     def parse(self):

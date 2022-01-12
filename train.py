@@ -8,7 +8,7 @@ import json
 from terminaltables import AsciiTable
 
 from model.yolo import Yolo
-from load import split_data
+from utils.load import split_data
 from utils.scheduler import CosineAnnealingWarmupRestarts
 from utils.logger import *
 from utils.options import TrainOptions
@@ -123,8 +123,8 @@ class Train:
         mosaic = False if self.args.no_mosaic else True
         multiscale = False if self.args.no_multiscale else True
 
-        train_dataset, train_dataloader = split_data(self.args.data_folder, self.args.img_size, self.args.batch_size, 
-                                                        augment=augment, mosaic=mosaic, multiscale=multiscale, custom=self.args.custom_dataset)
+        train_dataset, train_dataloader = split_data(self.args.data_folder, self.args.dataset, self.args.img_size, self.args.batch_size, 
+                                                        augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
         scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
@@ -143,9 +143,6 @@ class Train:
         for epoch in range(self.args.epochs):
 
             for batch, (_, imgs, targets) in enumerate(train_dataloader):
-                if len(targets) == 0:
-                    continue
-
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
                 targets = targets.to(self.device)

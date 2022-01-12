@@ -5,6 +5,13 @@ import numpy as np
 import torch
 
 class CustomDataset(BaseDataset):
+    def __init__(self, img_files, labels, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
+        super().__init__(img_files, labels, img_size, augment, mosaic, multiscale, normalized_labels)
+        self.label_files = [
+            path.replace(".jpg", ".txt")
+            for path in self.img_files
+        ]
+
     def load_target(self, index, h_factor, w_factor, pad, padded_h, padded_w, mosaic=False):
         label_path = self.label_files[index % len(self.img_files)].rstrip()
 

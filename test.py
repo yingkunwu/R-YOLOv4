@@ -6,9 +6,8 @@ import glob
 from terminaltables import AsciiTable
 
 from utils.options import TestOptions
-from utils.post_process import post_process
-from utils.geometry import load_class_names, skewiou
-from load import split_data
+from utils.post_process import post_process, skewiou
+from utils.load import split_data, load_class_names
 from model.yolo import Yolo
 
 # Reference: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/detect.py
@@ -177,8 +176,8 @@ class Test:
         self.model.eval()
 
         # Get dataloader
-        test_dataset, test_dataloader = split_data(self.args.data_folder, self.args.img_size, self.args.batch_size,
-                                                    shuffle=False, augment=False, mosaic=False, multiscale=False, custom=self.args.custom_dataset)
+        test_dataset, test_dataloader = split_data(self.args.data_folder, self.args.dataset, self.args.img_size, self.args.batch_size,
+                                                    shuffle=False, augment=False, mosaic=False, multiscale=False)
 
         print("Compute mAP...")
 
@@ -198,6 +197,9 @@ class Test:
                 outputs = post_process(outputs, conf_thres=self.args.conf_thres, nms_thres=self.args.nms_thres)
 
             sample_metrics += get_batch_statistics(outputs, targets, iou_threshold=self.args.iou_thres)
+
+        if len(sample_metrics) == 0:
+            assert False, "Something went wrong when loading data, data may not exist"
 
         # Concatenate sample statistics
         true_positives, pred_scores, pred_labels = [np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
