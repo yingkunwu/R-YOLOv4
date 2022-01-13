@@ -51,7 +51,7 @@ class Train:
 
     def load_model(self):
         pretrained_dict = torch.load(self.args.weights_path)
-        self.model = Yolo(n_classes=2)
+        self.model = Yolo(n_classes=self.args.number_of_classes)
         self.model = self.model.to(self.device)
         model_dict = self.model.state_dict()
 

@@ -54,7 +54,7 @@ def post_process(prediction, conf_thres=0.5, nms_thres=0.4):
         for label in labels:
             detect = detections[detections[:, -1] == label]
             while len(detect):
-                large_overlap = skewiou(detect[0, :5], detect[:, :5]) > nms_thres
+                large_overlap = skewiou(detect[0, :5].detach().cpu(), detect[:, :5].detach().cpu()) > nms_thres
                 # Indices of boxes with lower confidence scores, large IOUs and matching labels
                 weights = detect[large_overlap, 5:6]
                 # Merge overlapping bboxes by order of confidence
