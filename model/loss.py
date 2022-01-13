@@ -70,9 +70,9 @@ def bbox_xywha_ciou(pred_boxes, target_boxes):
     outer = torch.clamp((out_max_xy - out_min_xy), min=0)
     outer_diag = (outer[:, 0] ** 2) + (outer[:, 1] ** 2)
     union = area1 + area2 - inter_area
-    u = inter_diag / outer_diag
+    u = inter_diag / (outer_diag + 1e-15)
 
-    iou = inter_area / union
+    iou = inter_area / (union + 1e-15)
     v = (4 / (math.pi ** 2)) * torch.pow((torch.atan(w2 / h2) - torch.atan(w1 / h1)), 2)
 
     # alpha is a constant, it don't have gradient
