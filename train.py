@@ -8,10 +8,10 @@ import json
 from terminaltables import AsciiTable
 
 from model.yolo import Yolo
-from utils.load import split_data
-from utils.scheduler import CosineAnnealingWarmupRestarts
-from utils.logger import *
-from utils.options import TrainOptions
+from lib.load import load_data
+from lib.scheduler import CosineAnnealingWarmupRestarts
+from lib.logger import *
+from lib.options import TrainOptions
 
 
 def weights_init_normal(m):
@@ -123,7 +123,7 @@ class Train:
         mosaic = False if self.args.no_mosaic else True
         multiscale = False if self.args.no_multiscale else True
 
-        train_dataset, train_dataloader = split_data(self.args.data_folder, self.args.dataset, self.args.img_size, self.args.batch_size, 
+        train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size, self.args.batch_size, 
                                                         augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
         scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)

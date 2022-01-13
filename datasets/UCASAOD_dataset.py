@@ -1,28 +1,50 @@
-from .base_dataset import BaseDataset
-
 import os
 import numpy as np
 import torch
+import glob
+
+from .base_dataset import BaseDataset
+from lib.utils import load_class_names
 
 class UCASAODDataset(BaseDataset):
-    def __init__(self, img_files, labels, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
-        super().__init__(img_files, labels, img_size, augment, mosaic, multiscale, normalized_labels)
-        self.label_files = [
-            path.replace(".png", ".txt")
-            for path in self.img_files
-        ]
+    def __init__(self, data_dir, class_names, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
+        super().__init__(img_size, augment, mosaic, multiscale, normalized_labels)
+        self.img_files = sorted(glob.glob(os.path.join(data_dir, "*.png")))
+        self.label_files = [path.replace(".png", ".txt") for path in self.img_files]
+        self.category = {}
+        for i, name in enumerate(class_names):
+            self.category[name.replace(" ", "-")] = i
 
     def load_target(self, index, h_factor, w_factor, pad, padded_h, padded_w, mosaic=False):
         label_path = self.label_files[index % len(self.img_files)].rstrip()
 
         if os.path.exists(label_path):
-            boxes = torch.from_numpy(np.loadtxt(label_path).reshape(-1, 13))
-            label = torch.from_numpy(np.array(self.labels[index]))
+            lines = open(label_path, 'r').readlines()
 
-            x1, y1, x2, y2, x3, y3, x4, y4 = \
-                boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3], boxes[:, 4], boxes[:, 5], boxes[:, 6], boxes[:, 7]
+            x1, y1, x2, y2, x3, y3, x4, y4, label = [], [], [], [], [], [], [], [], []
+            for line in lines:
+                line = line.split('\t')
+                x1.append(float(line[1]))
+                y1.append(float(line[2]))
+                x2.append(float(line[3]))
+                y2.append(float(line[4]))
+                x3.append(float(line[5]))
+                y3.append(float(line[6]))
+                x4.append(float(line[7]))
+                y4.append(float(line[8]))
+                label.append(self.category[line[0]])
 
-            num_targets = len(boxes)
+            x1 = torch.tensor(x1)
+            y1 = torch.tensor(y1)
+            x2 = torch.tensor(x2)
+            y2 = torch.tensor(y2)
+            x3 = torch.tensor(x3)
+            y3 = torch.tensor(y3)
+            x4 = torch.tensor(x4)
+            y4 = torch.tensor(y4)
+            label = torch.tensor(label)
+
+            num_targets = len(label)
             x = ((x1 + x3) / 2 + (x2 + x4) / 2) / 2
             y = ((y1 + y3) / 2 + (y2 + y4) / 2) / 2
             w = torch.sqrt(torch.pow((x1 - x2), 2) + torch.pow((y1 - y2), 2))
@@ -62,7 +84,7 @@ class UCASAODDataset(BaseDataset):
             w *= w_factor / padded_w
             h *= h_factor / padded_h
 
-            targets = torch.zeros((len(boxes), 7))
+            targets = torch.zeros((len(label), 7))
             targets[:, 1] = label
             targets[:, 2] = x
             targets[:, 3] = y

@@ -3,14 +3,13 @@ import glob
 import random
 import os
 import numpy as np
-import cv2 as cv
 from PIL import Image
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
-from utils.augmentations import vertical_flip, horisontal_flip, rotate, hsv, gaussian_noise, mixup
+from lib.augmentations import vertical_flip, horisontal_flip, rotate, hsv, gaussian_noise, mixup
 
 
 def pad_to_square(img, pad_value):
@@ -34,8 +33,8 @@ def resize(image, size):
 class ImageDataset(Dataset):
     # Reference: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/utils/datasets.py
 
-    def __init__(self, folder_path, img_size=416):
-        self.files = sorted(glob.glob(os.path.join(folder_path, "*.png")))
+    def __init__(self, folder_path, img_size=416, ext="png"):
+        self.files = sorted(glob.glob(os.path.join(folder_path, "*.{}".format(ext))))
         self.img_size = img_size
 
     def __len__(self):
@@ -58,11 +57,9 @@ class ImageDataset(Dataset):
         return img_path, img
 
 class BaseDataset(Dataset):
-    def __init__(self, img_files, labels, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
-        self.img_files = img_files
-        self.label_files = None
+    def __init__(self, img_size=608, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
+        self.img_files = None
         self.img_size = img_size
-        self.labels = labels
         self.augment = augment
         self.mosaic = mosaic
         self.mosaic_border = [-img_size // 2, -img_size // 2]
@@ -73,7 +70,6 @@ class BaseDataset(Dataset):
         self.batch_count = 0
 
     def __getitem__(self, index):
-
         if self.mosaic:
             img, targets = self.load_mosaic(index)
             if np.random.random() < 0.1:

@@ -1,21 +1,19 @@
-from .base_dataset import BaseDataset
-
 import os
 import numpy as np
 import torch
+import glob
+
+from .base_dataset import BaseDataset
+from lib.utils import load_class_names
 
 class DOTADataset(BaseDataset):
-    def __init__(self, img_files, labels, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
-        super().__init__(img_files, labels, img_size, augment, mosaic, multiscale, normalized_labels)
-        self.label_files = [
-            path.replace(".png", ".txt")
-            for path in self.img_files
-        ]
-        self.category = {
-            'plane' : 0, 'ship' : 1, 'storage-tank' : 2, 'baseball-diamond' : 3, 'tennis-court' : 4, 'basketball-court' : 5,
-            'ground-track-field' : 6, 'harbor' : 7, 'bridge' : 8, 'large-vehicle' : 9, 'small-vehicle' : 10,
-            'helicopter' : 11, 'roundabout' : 12, 'soccer-ball-field' : 13, 'swimming-pool' : 14, 'container-crane' : 15
-        }
+    def __init__(self, data_dir, class_names, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
+        super().__init__(img_size, augment, mosaic, multiscale, normalized_labels)
+        self.img_files = sorted(glob.glob(os.path.join(data_dir, "*.png")))
+        self.label_files = [path.replace(".png", ".txt") for path in self.img_files]
+        self.category = {}
+        for i, name in enumerate(class_names):
+            self.category[name.replace(" ", "-")] = i
 
     def load_target(self, index, h_factor, w_factor, pad, padded_h, padded_w, mosaic=False):
         label_path = self.label_files[index % len(self.img_files)].rstrip()

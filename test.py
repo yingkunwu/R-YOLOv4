@@ -5,9 +5,10 @@ import tqdm
 import glob
 from terminaltables import AsciiTable
 
-from utils.options import TestOptions
-from utils.post_process import post_process, skewiou
-from utils.load import split_data, load_class_names
+from lib.options import TestOptions
+from lib.post_process import post_process, skewiou
+from lib.load import load_data
+from lib.utils import load_class_names
 from model.yolo import Yolo
 
 # Reference: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/detect.py
@@ -139,7 +140,7 @@ class Test:
     def __init__(self, args):
         self.args = args
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.class_names = load_class_names(self.args.class_path)
+        self.class_names = load_class_names(os.path.join(self.args.data_folder, "class.names"))
         self.model = None
 
     def load_model(self):
@@ -176,7 +177,7 @@ class Test:
         self.model.eval()
 
         # Get dataloader
-        test_dataset, test_dataloader = split_data(self.args.data_folder, self.args.dataset, self.args.img_size, self.args.batch_size,
+        test_dataset, test_dataloader = load_data(self.args.data_folder, self.args.dataset, "test", self.args.img_size, self.args.batch_size,
                                                     shuffle=False, augment=False, mosaic=False, multiscale=False)
 
         print("Compute mAP...")

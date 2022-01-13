@@ -50,33 +50,34 @@ def get_color(c, x, max_val):
 def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None):
     img = np.array(cv.imread(img_path))
 
-    boxes = rescale_boxes(boxes, img_size, img.shape[:2])
-    boxes = np.array(boxes)
+    if boxes is not None:
+        boxes = rescale_boxes(boxes, img_size, img.shape[:2])
+        boxes = np.array(boxes)
 
-    for i in range(len(boxes)):
-        box = boxes[i]
-        x, y, w, h, theta = box[0], box[1], box[2], box[3], box[4]
+        for i in range(len(boxes)):
+            box = boxes[i]
+            x, y, w, h, theta = box[0], box[1], box[2], box[3], box[4]
 
-        bbox = cv.boxPoints(((x, y), (w, h), theta / np.pi * 180))
-        bbox = np.int0(bbox)
-        cv.drawContours(img, [bbox], 0, (0, 255, 0), 2)
+            bbox = cv.boxPoints(((x, y), (w, h), theta / np.pi * 180))
+            bbox = np.int0(bbox)
+            cv.drawContours(img, [bbox], 0, (0, 255, 0), 2)
 
-        if color:
-            rgb = color
-        else:
-            rgb = (255, 0, 0)
+            if color:
+                rgb = color
+            else:
+                rgb = (255, 0, 0)
 
-        cls_id = np.squeeze(int(box[7]))
-        classes = len(class_names)
-        offset = cls_id * 123457 % classes
-        red = get_color(2, offset, classes)
-        green = get_color(1, offset, classes)
-        blue = get_color(0, offset, classes)
-        if color is None:
-            rgb = (red, green, blue)
+            cls_id = np.squeeze(int(box[7]))
+            classes = len(class_names)
+            offset = cls_id * 123457 % classes
+            red = get_color(2, offset, classes)
+            green = get_color(1, offset, classes)
+            blue = get_color(0, offset, classes)
+            if color is None:
+                rgb = (red, green, blue)
 
-        img = cv.putText(img, class_names[cls_id] + ":" + str(round(box[5] * box[6], 2)),
-                         bbox[0], cv.FONT_HERSHEY_SIMPLEX, 0.6, rgb, 1)
+            img = cv.putText(img, class_names[cls_id] + ":" + str(round(box[5] * box[6], 2)),
+                            bbox[0], cv.FONT_HERSHEY_SIMPLEX, 0.6, rgb, 1)
 
     output_path = os.path.join(output_folder, os.path.split(img_path)[-1])
     cv.imwrite(output_path, img)
