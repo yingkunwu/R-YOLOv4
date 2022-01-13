@@ -17,6 +17,9 @@ class CustomDataset(BaseDataset):
         if os.path.exists(label_path):
             boxes = torch.from_numpy(np.loadtxt(label_path).reshape(-1, 6))
             num_targets = len(boxes)
+            targets = torch.zeros((num_targets, 7))
+            if not num_targets:
+                return targets
 
             x, y, w, h, theta, label = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3], boxes[:, 4], boxes[:, 5]
             temp_theta = []
@@ -58,7 +61,6 @@ class CustomDataset(BaseDataset):
             w *= w_factor / padded_w
             h *= h_factor / padded_h
 
-            targets = torch.zeros((len(boxes), 7))
             targets[:, 1] = label
             targets[:, 2] = x
             targets[:, 3] = y

@@ -4,7 +4,6 @@ import torch
 import glob
 
 from .base_dataset import BaseDataset
-from lib.utils import load_class_names
 
 class DOTADataset(BaseDataset):
     def __init__(self, data_dir, class_names, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
@@ -34,6 +33,11 @@ class DOTADataset(BaseDataset):
                 y4.append(float(line[7]))
                 label.append(self.category[line[8]])
 
+            num_targets = len(label)
+            targets = torch.zeros((num_targets, 7))
+            if not num_targets:
+                return targets
+            
             x1 = torch.tensor(x1)
             y1 = torch.tensor(y1)
             x2 = torch.tensor(x2)
@@ -44,7 +48,6 @@ class DOTADataset(BaseDataset):
             y4 = torch.tensor(y4)
             label = torch.tensor(label)
 
-            num_targets = len(label)
             x = ((x1 + x3) / 2 + (x2 + x4) / 2) / 2
             y = ((y1 + y3) / 2 + (y2 + y4) / 2) / 2
             w = torch.sqrt(torch.pow((x1 - x2), 2) + torch.pow((y1 - y2), 2))
@@ -84,7 +87,6 @@ class DOTADataset(BaseDataset):
             w *= w_factor / padded_w
             h *= h_factor / padded_h
 
-            targets = torch.zeros((len(label), 7))
             targets[:, 1] = label
             targets[:, 2] = x
             targets[:, 3] = y

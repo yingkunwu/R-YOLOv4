@@ -100,11 +100,6 @@ class BaseDataset(Dataset):
 
     def collate_fn(self, batch):
         paths, imgs, targets = list(zip(*batch))
-        # Remove empty placeholder targets
-        targets = [boxes for boxes in targets if boxes is not None]
-        # Add sample index to targets
-        for i, boxes in enumerate(targets):
-            boxes[:, 0] = i
         targets = torch.cat(targets, 0)
         # Selects new image size every tenth batch
         if self.multiscale and self.batch_count % 10 == 0:
