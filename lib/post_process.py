@@ -17,8 +17,7 @@ def skewiou(box1, box2):
     for i in range(len(box2)):
         p = rbox2polygon(box2[i])
         if not g.is_valid or not p.is_valid:
-            print("something went wrong in skew iou")
-            return 0
+            raise AssertionError("something went wrong in skew iou")
         inter = g.intersection(p).area
         union = g.area + p.area - inter
         iou.append(torch.tensor(inter / (union + 1e-16)))
