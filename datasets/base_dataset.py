@@ -1,4 +1,3 @@
-
 import glob
 import random
 import os
@@ -57,17 +56,21 @@ class ImageDataset(Dataset):
         return img_path, img
 
 class BaseDataset(Dataset):
-    def __init__(self, img_size=608, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
-        self.img_files = None
+    def __init__(self, img_size=608, sample_size=600, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
         self.img_size = img_size
         self.augment = augment
         self.mosaic = mosaic
-        self.mosaic_border = [-img_size // 2, -img_size // 2]
+        self.mosaic_sample_size = sample_size
+        self.mosaic_border = [-self.mosaic_sample_size // 2, -self.mosaic_sample_size // 2]
         self.multiscale = multiscale
         self.normalized_labels = normalized_labels
         self.min_size = self.img_size - 3 * 32
         self.max_size = self.img_size + 3 * 32
         self.batch_count = 0
+
+        self.img_files = None
+        self.label_files = None
+        self.category = None
 
     def __getitem__(self, index):
         if self.mosaic:
@@ -82,10 +85,11 @@ class BaseDataset(Dataset):
             img = transforms.ToTensor()(img)
             img, pad = pad_to_square(img, 0)
 
-            h_factor, w_factor = (h, w) if self.normalized_labels else (1, 1)
-            _, padded_h, padded_w = img.shape
+            label_factor = (h, w) if self.normalized_labels else (1, 1)
+            padded_size = img.shape[1:]
+            boundary = (0, w, 0, h)
 
-            targets = self.load_target(index, h_factor, w_factor, pad, padded_h, padded_w)
+            targets = self.load_target(index, label_factor, pad, padded_size, boundary)
 
         # Apply augmentations
         if self.augment:
@@ -100,6 +104,8 @@ class BaseDataset(Dataset):
 
     def collate_fn(self, batch):
         paths, imgs, targets = list(zip(*batch))
+        # Remove empty placeholder targets
+        targets = [boxes for boxes in targets if boxes is not None]
         # Add sample index to targets
         for i, boxes in enumerate(targets):
             boxes[:, 0] = i
@@ -134,49 +140,57 @@ class BaseDataset(Dataset):
 
     def load_mosaic(self, index):
         """
-        Loads 1 image + 3 random images into a 4-image mosaic
+        Loads 1 image + 3 random images into a 4-image mosaic.
+        Each image is cropped based on the sameple_size.
+        A larger sample size means more information in each image would be used.
         """
 
         labels4 = []
-        s = self.img_size
+        s = self.mosaic_sample_size
         yc, xc = [int(random.uniform(-x, 2 * s + x)) for x in self.mosaic_border]  # mosaic center x, y
         indices = [index] + [random.randint(0, len(self.img_files) - 1) for _ in range(3)]  # 3 additional image indices
         random.shuffle(indices)
 
-        padded_h, padded_w = s * 2, s * 2
+        h_padded, w_padded = s * 2, s * 2
+        padded_size = (h_padded, w_padded)
 
         for i, index in enumerate(indices):
-            # Load image
             img, (h, w) = self.load_image(index)
-            h_factor, w_factor = (h, w) if self.normalized_labels else (1, 1)
+            label_factor = (h, w) if self.normalized_labels else (1, 1)
 
             # place img in img4
             if i == 0:  # top left
-                img4 = np.zeros((padded_h, padded_w, img.shape[2]), dtype=np.uint8)
+                img4 = np.zeros((h_padded, w_padded, img.shape[2]), dtype=np.uint8)
                 x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
-                x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
+                xt, yt = int(random.uniform((x2a - x1a), w)), int(random.uniform((y2a - y1a), h))
+                x1b, y1b, x2b, y2b = xt - (x2a - x1a), yt - (y2a - y1a), xt, yt  # xmin, ymin, xmax, ymax (small image)
                 padw = xc - x2b
                 padh = yc - y2b
             elif i == 1:  # top right
                 x1a, y1a, x2a, y2a = xc, max(yc - h, 0), min(xc + w, s * 2), yc
-                x1b, y1b, x2b, y2b = 0, h - (y2a - y1a), min(w, x2a - x1a), h
-                padw = xc
+                xt, yt = int(random.uniform((x2a - x1a), w)), int(random.uniform((y2a - y1a), h))
+                x1b, y1b, x2b, y2b = xt - (x2a - x1a), yt - (y2a - y1a), xt, yt
+                padw = xc - x1b
                 padh = yc - y2b
             elif i == 2:  # bottom left
                 x1a, y1a, x2a, y2a = max(xc - w, 0), yc, xc, min(s * 2, yc + h)
-                x1b, y1b, x2b, y2b = w - (x2a - x1a), 0, w, min(y2a - y1a, h)
+                xt, yt = int(random.uniform((x2a - x1a), w)), int(random.uniform((y2a - y1a), h))
+                x1b, y1b, x2b, y2b = xt - (x2a - x1a), yt - (y2a - y1a), xt, yt
                 padw = xc - x2b
-                padh = yc
+                padh = yc - y1b
             elif i == 3:  # bottom right
                 x1a, y1a, x2a, y2a = xc, yc, min(xc + w, s * 2), min(s * 2, yc + h)
-                x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(y2a - y1a, h)
-                padw = xc
-                padh = yc
+                xt, yt = int(random.uniform((x2a - x1a), w)), int(random.uniform((y2a - y1a), h))
+                x1b, y1b, x2b, y2b = xt - (x2a - x1a), yt - (y2a - y1a), xt, yt
+                padw = xc - x1b
+                padh = yc - y1b
 
             img4[y1a:y2a, x1a:x2a, :] = img[y1b:y2b, x1b:x2b, :]  # img4[ymin:ymax, xmin:xmax]
 
             # Labels
-            targets = self.load_target(index, h_factor, w_factor, (padw, padw, padh, padh), padded_h, padded_w, mosaic=True)
+            pad = (padw, padw, padh, padh)
+            boundary = (x1b, x2b, y1b, y2b)
+            targets = self.load_target(index, label_factor, pad, padded_size, boundary)
             labels4.append(targets)
 
         # Concat labels
@@ -185,5 +199,90 @@ class BaseDataset(Dataset):
 
         return img4, labels4
 
-    def load_target(self):
+
+    def load_target(self, index, label_factor, pad, padded_size, boundary):
+        """
+        Args:
+            index: index of label files going to be load
+            label_factor: factor that resize labels to the same size with images
+            pad: the amount of zero pixel value that are padded beside images
+            padded_size: the size of images after padding
+            boundary: the boundary of targets
+
+        Returns:
+            Normalized labels of objects -> [batch_index, label, x, y, w, h, theta] -> torch.Size([num_targets, 7])
+        """
+        label_path = self.label_files[index % len(self.img_files)].rstrip()
+
+        if os.path.exists(label_path):
+            x, y, w, h, theta, label, num_targets = self.load_files(label_path)
+
+            # Return zero length tersor if there is no object in the image
+            if not num_targets:
+                return torch.zeros((0, 7))
+
+            # Check whether theta of oriented bounding boxes are within the boundary or not
+            if not ((-np.pi / 2 < theta).all() or (theta <= np.pi / 2).all()):
+                raise AssertionError("Theta of oriented bounding boxes are not within the boundary (-pi / 2, pi / 2]")
+
+            # Make the height of bounding boxes always larger then it's width
+            for i in range(num_targets):
+                if w[i] > h[i]:
+                    temp1, temp2 = h[i].clone(), w[i].clone()
+                    w[i], h[i] = temp1, temp2
+                    if theta[i] > 0:
+                        theta[i] = theta[i] - np.pi / 2
+                    else:
+                        theta[i] = theta[i] + np.pi / 2
+
+            # Make the scale of coordinates to the same size of images
+            h_factor, w_factor = label_factor
+            x *= w_factor
+            y *= h_factor
+            w *= w_factor
+            h *= h_factor
+
+            # Remove objects that exceed the size of images or the cropped area when doing mosaic augmentation
+            left_boundary, right_boundary, top_boundary, bottom_boundary = boundary
+            mask = torch.ones_like(x)
+            mask = torch.logical_and(mask, x > left_boundary)
+            mask = torch.logical_and(mask, x < right_boundary)
+            mask = torch.logical_and(mask, y > top_boundary)
+            mask = torch.logical_and(mask, y < bottom_boundary)
+
+            label = label[mask]
+            x = x[mask]
+            y = y[mask]
+            w = w[mask]
+            h = h[mask]
+            theta = theta[mask]
+
+            # Relocalize coordinates based on images padding or mosaic augmentation
+            x1 = (x - w / 2) + pad[0]
+            y1 = (y - h / 2) + pad[2]
+            x2 = (x + w / 2) + pad[1]
+            y2 = (y + h / 2) + pad[3]
+
+            # Normalized coordinates
+            padded_h, padded_w = padded_size
+            x = ((x1 + x2) / 2) / padded_w
+            y = ((y1 + y2) / 2) / padded_h
+            w /= padded_w
+            h /= padded_h
+
+            targets = torch.zeros((len(label), 7))
+            targets[:, 1] = label
+            targets[:, 2] = x
+            targets[:, 3] = y
+            targets[:, 4] = w
+            targets[:, 5] = h
+            targets[:, 6] = theta
+            return targets
+
+        else:
+            print(label_path)
+            assert False, "Label file not found"
+
+
+    def load_files(self):
         raise NotImplementedError
