@@ -177,8 +177,8 @@ class Test:
         self.model.eval()
 
         # Get dataloader
-        test_dataset, test_dataloader = load_data(self.args.data_folder, self.args.dataset, "test", self.args.img_size, self.args.batch_size,
-                                                    shuffle=False, augment=False, mosaic=False, multiscale=False)
+        test_dataset, test_dataloader = load_data(self.args.data_folder, self.args.dataset, "test", self.args.img_size,
+                                                    batch_size=self.args.batch_size, shuffle=False, augment=False, mosaic=False, multiscale=False)
 
         print("Compute mAP...")
 

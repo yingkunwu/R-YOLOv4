@@ -123,8 +123,8 @@ class Train:
         mosaic = False if self.args.no_mosaic else True
         multiscale = False if self.args.no_multiscale else True
 
-        train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size, self.args.batch_size, 
-                                                        augment=augment, mosaic=mosaic, multiscale=multiscale)
+        train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size, self.args.sample_size,
+                                                        self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
         scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
