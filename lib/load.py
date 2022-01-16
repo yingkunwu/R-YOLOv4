@@ -12,13 +12,13 @@ def load_data(data_dir, dataset, action, img_size=608, sample_size=600, batch_si
     data_dir = os.path.join(data_dir, action)
 
     if dataset == "UCAS_AOD":
-        dataset = UCASAODDataset(data_dir, class_names, img_size, sample_size, augment, mosaic, multiscale)
+        dataset = UCASAODDataset(data_dir, class_names, img_size=img_size, sample_size=sample_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
     
     elif dataset == "DOTA":
-        dataset = DOTADataset(data_dir, class_names, img_size, sample_size, augment, mosaic, multiscale)
+        dataset = DOTADataset(data_dir, class_names, img_size=img_size, sample_size=sample_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
 
     elif dataset == "custom":
-        dataset = CustomDataset(data_dir, img_size, augment, sample_size, mosaic, multiscale)
+        dataset = CustomDataset(data_dir, img_size=img_size, augment=augment, sample_size=sample_size, mosaic=mosaic, multiscale=multiscale)
     
     else: 
         raise NotImplementedError
