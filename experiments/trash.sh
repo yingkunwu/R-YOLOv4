@@ -1,0 +1,1 @@
+python train.py --data_folder data/trash --model_name trash --number_of_classes 2 --batch_size 4 --img_size 416 --sample_size 1000 --dataset custom --no_multiscale
