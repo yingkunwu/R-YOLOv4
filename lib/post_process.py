@@ -45,7 +45,7 @@ def post_process(prediction, conf_thres=0.5, nms_thres=0.4):
         # Sort by it
         image_pred = image_pred[(-score).argsort()]
         class_confs, class_preds = image_pred[:, 6:].max(1, keepdim=True)  # class_preds-> index of classes
-        detections = torch.cat((image_pred[:, :6], class_confs.float(), class_preds.float()), 1)
+        detections = torch.cat((image_pred[:, :6], class_confs.float(), class_preds.float()), 1).detach().cpu()
 
         # non-maximum suppression
         keep_boxes = []
@@ -53,14 +53,14 @@ def post_process(prediction, conf_thres=0.5, nms_thres=0.4):
         for label in labels:
             detect = detections[detections[:, -1] == label]
             while len(detect):
-                large_overlap = skewiou(detect[0, :5].detach().cpu(), detect[:, :5].detach().cpu()) > nms_thres
+                large_overlap = skewiou(detect[0, :5], detect[:, :5].detach()) > nms_thres
                 # Indices of boxes with lower confidence scores, large IOUs and matching labels
                 weights = detect[large_overlap, 5:6]
                 # Merge overlapping bboxes by order of confidence
                 detect[0, :4] = (weights * detect[large_overlap, :4]).sum(0) / weights.sum()
-                keep_boxes += [detect[0].detach()]
+                keep_boxes += [detect[0]]
                 detect = detect[~large_overlap]
             if keep_boxes:
-                output[batch] = torch.stack(keep_boxes).cpu()
+                output[batch] = torch.stack(keep_boxes)
 
     return output
