@@ -4,16 +4,7 @@ This is a PyTorch-based R-YOLOv4 implementation which combines YOLOv4 model and 
 (Final project for NCKU INTRODUCTION TO ARTIFICIAL INTELLIGENCE course)
 
 ### Introduction
-The objective of this project is to provide a capability of oriented object detection for YOLOv4 model. As a result, modifying the original loss function of bounding boxes for the model is needed. At last, I got a successful result by increasing the number of anchor boxes with different rotating angle and combining smooth-L1-IoU loss function proposed by [R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object](https://arxiv.org/abs/1908.05612) into the original loss.
-
-### Dataset
-
-**UCAS-High Resolution Aerial Object Detection Dataset (UCAS-AOD)**
-
-Label: x1, y1, x2, y2, x3, y3, x4, y4, theta, x, y, width, height </br>
-(x1, y1) is the coordinate located on the upper left of the bounding box; (x2, y2), (x3, y3) and (x4, y4) are the rest of the bounding box corners following the clockwise order.
-
-Though it provides theta for each bounding box, it is not within the angle range that I want. You can check out how I calculated the angle that I need in [tools/load.py](https://github.com/kunnnnethan/R-YOLOv4/blob/bc106d5d4963a3085e8b88eb162b64d44e92abc3/tools/load.py).
+The objective of this project is to adapt YOLOv4 model to detecting oriented objects. As a result, modifying the original loss function of the model is required. I got a successful result by increasing the number of anchor boxes with different rotating angle and combining smooth-L1-IoU loss function proposed by [R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object](https://arxiv.org/abs/1908.05612) into the original loss for bounding boxes.
 
 ### Features
 
@@ -37,6 +28,11 @@ Cosine Annealing with Warmup (Reference: [Cosine Annealing with Warmup for PyTor
 
 As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1**. Therefore I used it for my loss function.
 
+#### Results
+
+| Method | Plane | Car | mAP |
+| -------- | -------- | -------- | -------- |
+| YOLOv4 (smoothL1-iou) | 98.05 | 92.05 | 95.05|
 
 ### Usage
 
@@ -57,65 +53,79 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
     $ pip install -r requirements.txt
     ```
 
-2. Download  weights
-
-    Download from Shell
-    ```
-    $ chmod +x ./setup.sh
-    $ ./setup.sh
-    ```
-    Download from Google Drives</br>
-    [weights](https://drive.google.com/uc?export=download&id=1qi-EWYPGJjZ_CkYh1LatDgfMSfQ0aqhk)
-
+2. Download  pretrained weights
+    [weights](https://drive.google.com/uc?export=download&id=1zPSXWwbmNwUV4OHFuKoILByx_hetPBXM)
+    
 3. Make sure your files arrangment looks like the following
+    Note that each of your dataset folder in `data` should split into three files, namely `train`, `test`, and `detect`.
     ```
     R-YOLOv4/
     ├── train.py
     ├── test.py
     ├── detect.py
+    ├── xml2txt.py
+    ├── environment.xml
     ├── requirements.txt
     ├── model/
-    ├── tools/
+    ├── datasets/
+    ├── lib/
     ├── outputs/
-    ├── weights
+    ├── weights/
         ├── pretrained/ (for training)
-        └── UCAS_AOD/ (for testing and detection)
-    └── data
-        ├── coco.names
-        ├── train
-            ├── 0
+        └── UCAS-AOD/ (for testing and detection)
+    └── data/
+        └── UCAS-AOD/
+            ├── class.names
+            ├── train/
                 ├── ...png
                 └── ...txt
-            └── 1
+            ├── test/
                 ├── ...png
                 └── ...txt
-        ├── test
-            ├── 0
-                ├── ...png
-                └── ...txt
-            └── 1
-                ├── ...png
-                └── ...txt
-        └── detect
-            └── ...png
+            └── detect/
+                └── ...png
     ```
+4. Train, Test, and Detect
+    Please refer to `lib/options.py` to check out all the arguments.
+    You can download the [weight](https://drive.google.com/uc?export=download&id=1UlewA9dcXsCiCbuvKCU6vL8AqSYeI3mj) that I trained from UCAS-AOD.
 
+    
 ### Train
 
+I have implemented methods to load and train three different datasets. They are UCAS-AOD, DOTA, and custom dataset respectively. You can check out how I loaded those dataset into the model at [/datasets](https://github.com/kunnnnethan/R-YOLOv4/tree/main/datasets). The angle of each bounding box is limited in `(- pi/2,  pi/2]`, and the height of each bounding box is always longer than it's width.
+
+You can run [experiments/display_inputs.py](https://github.com/kunnnnethan/R-YOLOv4/blob/main/experiments/display_inputs.py) to visualize whether your data is loaded successfully.
+
+#### UCAS-AOD dataset
+
+Please refer to [this repository](https://github.com/kunnnnethan/UCAS-AOD-benchmark) to rearrange files so that it can be loaded and trained by this model.
 ```
-usage: train.py [-h] [--data_folder DATA_FOLDER] [--weights_path WEIGHTS_PATH] [--model_name MODEL_NAME]
-                [--epochs EPOCHS] [--lr LR] [--batch_size BATCH_SIZE] [--subdivisions SUBDIVISIONS]
-                [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES] [--no_augmentation] [--no_mosaic]
-                [--no_multiscale] [--custom_dataset]
+While training, please specify which dataset you are using.
+$ python train.py --dataset UCAS_AOD
 ```
 
-#### Training with custom dataset
-1. If you want to train your custom dataset, you can use [labelImg2](https://github.com/chinakook/labelImg2) to help label your data. labelImg2 is capable of labeling rotated objects.
-2. Afterwards, convert produced files into txt files and make sure your label format in txt files is the same as [x, y, w, h, angle, label]. An example is given at [here](data/custom_dataset_label_example.txt).
-3. Finally, add the --custom_dataset flag when training. For example:
-    ```
-    python train.py --model_name my_model --custom_dataset
-    ```
+#### DOTA dataset
+
+Download the official dataset from [here](https://captain-whu.github.io/DOTA/dataset.html). The original files should be able to be loaded and trained by this model.
+```
+While training, please specify which dataset you are using.
+$ python train.py --dataset DOTA
+```
+
+#### Train with custom dataset
+1. Use [labelImg2](https://github.com/chinakook/labelImg2) to help label your data. labelImg2 is capable of labeling rotated objects.
+2. Move your data folder into the `R-YOLOv4/data` folder.
+3. Run xml2txt.py
+    1. generate txt files:
+    ```python xml2txt.py --data_folder your-path --action gen_txt```
+    2. delete xml files:
+    ```python xml2txt.py --data_folder your-path --action del_xml```
+    
+A [trash](https://drive.google.com/uc?export=download&id=1jZHgezUkKExLjSXpALd3N8lXX5kvH_S) custom dataset that I made and the [weight](https://drive.google.com/uc?export=download&id=1ppR__Un4NRHA8BDwpd9Qz7NAfh4fchwM) trained from it are provided for your convenience.
+```
+While training, please specify which dataset you are using.
+$ python train.py --dataset custom
+```
 
 #### Training Log
 ```
@@ -137,39 +147,24 @@ If you would like to use tensorboard for tracking traing process.
 * Run command ```$ tensorboard --logdir='weights/your_model_name/logs' --port=6006``` 
 * Go to [http://localhost:6006/]( http://localhost:6006/)
 
+### Results
 
-### Test
+#### UCAS_AOD
 
-| Method | Plane | Car | mAP |
-| -------- | -------- | -------- | -------- |
-| YOLOv4 (smoothL1-iou) | 98.05 | 92.05 | 95.05|
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/UCAS_AOD/P0292.png" alt="car" height="430"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/UCAS_AOD/P0259.png" alt="plane" height="413"/>
 
-```
-usage: test.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--class_path CLASS_PATH]
-               [--conf_thres CONF_THRES] [--nms_thres NMS_THRES] [--iou_thres IOU_THRES] [--batch_size BATCH_SIZE]
-               [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES] [--custom_dataset]
-```
+#### DOTA
 
-### Detect
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/DOTA/P0006.png" alt="DOTA" height="430"/>
 
-```
-usage: detect.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--class_path CLASS_PATH] [--conf_thres CONF_THRES]
-                 [--nms_thres NMS_THRES] [--batch_size BATCH_SIZE] [--img_size IMG_SIZE] [--number_of_classes NUMBER_OF_CLASSES]
-```
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/DOTA/P0031.png" alt="DOTA" height="430"/>
 
-<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/P0292.png" alt="car" height="430"/>
-<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/P0259.png" alt="plane" height="413"/>
+#### trash (custom dataset)
 
-**Results from other dataset**
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/478.jpg" alt="garbage1" height="430"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/540.jpg" alt="garbage2" height="430"/>
 
-<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/new9_864.jpg" alt="garbage1" height="430"/>
-<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/new9_987.jpg" alt="garbage2" height="430"/>
-
-### References
-[yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)</br>
-[eriklindernoren/PyTorch-YOLOv3](https://github.com/eriklindernoren/PyTorch-YOLOv3)</br>
-[Tianxiaomo/pytorch-YOLOv4](https://github.com/Tianxiaomo/pytorch-YOLOv4)</br>
-[ultralytics/yolov5](https://github.com/ultralytics/yolov5/tree/master/utils)
 
 ### TODO
 
@@ -177,7 +172,12 @@ usage: detect.py [-h] [--data_folder DATA_FOLDER] [--model_name MODEL_NAME] [--c
 - [x] Mixup Augmentation
 
 
-### Credit
+### References
+
+[yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)</br>
+[eriklindernoren/PyTorch-YOLOv3](https://github.com/eriklindernoren/PyTorch-YOLOv3)</br>
+[Tianxiaomo/pytorch-YOLOv4](https://github.com/Tianxiaomo/pytorch-YOLOv4)</br>
+[ultralytics/yolov5](https://github.com/ultralytics/yolov5/tree/master/utils)
 
 **YOLOv4: Optimal Speed and Accuracy of Object Detection**
 
