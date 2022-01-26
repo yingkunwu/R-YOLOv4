@@ -53,12 +53,10 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
     $ pip install -r requirements.txt
     ```
 
-2. Download  pretrained weights
-
+2. Download  pretrained weights</br>
     [weights](https://drive.google.com/uc?export=download&id=1zPSXWwbmNwUV4OHFuKoILByx_hetPBXM)
     
-3. Make sure your files arrangment looks like the following
-
+3. Make sure your files arrangment looks like the following</br>
     Note that each of your dataset folder in `data` should split into three files, namely `train`, `test`, and `detect`.
     ```
     R-YOLOv4/
@@ -87,9 +85,8 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
             └── detect/
                 └── ...png
     ```
-4. Train, Test, and Detect
-
-    Please refer to `lib/options.py` to check out all the arguments.
+4. Train, Test, and Detect</br>
+    Please refer to `lib/options.py` to check out all the arguments.</br>
     You can download the [weight](https://drive.google.com/uc?export=download&id=1UlewA9dcXsCiCbuvKCU6vL8AqSYeI3mj) that I trained from UCAS-AOD.
 
     
@@ -163,8 +160,8 @@ If you would like to use tensorboard for tracking traing process.
 
 #### trash (custom dataset)
 
-<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/478.jpg" alt="garbage1" height="430"/>
-<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/540.jpg" alt="garbage2" height="430"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/478.jpg" alt="garbage1" height="410"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/540.jpg" alt="garbage2" height="410"/>
 
 
 ### TODO
