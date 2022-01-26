@@ -86,9 +86,7 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
                 └── ...png
     ```
 4. Train, Test, and Detect</br>
-    Please refer to `lib/options.py` to check out all the arguments.</br>
-    You can download the [weight](https://drive.google.com/uc?export=download&id=1UlewA9dcXsCiCbuvKCU6vL8AqSYeI3mj) that I trained from UCAS-AOD.
-
+    Please refer to `lib/options.py` to check out all the arguments.
     
 ### Train
 
@@ -98,7 +96,8 @@ You can run [experiments/display_inputs.py](https://github.com/kunnnnethan/R-YOL
 
 #### UCAS-AOD dataset
 
-Please refer to [this repository](https://github.com/kunnnnethan/UCAS-AOD-benchmark) to rearrange files so that it can be loaded and trained by this model.
+Please refer to [this repository](https://github.com/kunnnnethan/UCAS-AOD-benchmark) to rearrange files so that it can be loaded and trained by this model.</br>
+You can download the [weight](https://drive.google.com/uc?export=download&id=1UlewA9dcXsCiCbuvKCU6vL8AqSYeI3mj) that I trained from UCAS-AOD.
 ```
 While training, please specify which dataset you are using.
 $ python train.py --dataset UCAS_AOD
