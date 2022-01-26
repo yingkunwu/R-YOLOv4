@@ -23,16 +23,10 @@ Cosine Annealing with Warmup (Reference: [Cosine Annealing with Warmup for PyTor
 ---
 
 #### Recall
-
 <img src="https://i.imgur.com/mQf4S1m.png" alt="recall" height="300"/>
-
 As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1**. Therefore I used it for my loss function.
 
-#### Results
-
-| Method | Plane | Car | mAP |
-| -------- | -------- | -------- | -------- |
-| YOLOv4 (smoothL1-iou) | 98.05 | 92.05 | 95.05|
+---
 
 ### Usage
 
@@ -150,14 +144,23 @@ If you would like to use tensorboard for tracking traing process.
 
 #### UCAS_AOD
 
+| Method | Plane | Car | mAP |
+| -------- | -------- | -------- | -------- |
+| YOLOv4 (smoothL1-iou) | 98.05 | 92.05 | 95.05|
+
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/UCAS_AOD/P0292.png" alt="car" height="430"/>
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/UCAS_AOD/P0769.png" alt="plane" height="413"/>
 
 #### DOTA
 
+DOTA have not been tested yet. (It's quite difficult to test it because of large file size)
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/DOTA/P0006.png" alt="DOTA" height="430"/><img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/DOTA/P0031.png" alt="DOTA" height="430"/>
 
 #### trash (custom dataset)
+
+| Method | Plane | Car | mAP |
+| -------- | -------- | -------- | -------- |
+| YOLOv4 (smoothL1-iou) | 100.00 | 100.00 | 100.00|
 
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/478.jpg" alt="garbage1" height="410"/>
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/540.jpg" alt="garbage2" height="410"/>
