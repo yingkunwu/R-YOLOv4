@@ -54,9 +54,11 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
     ```
 
 2. Download  pretrained weights
+
     [weights](https://drive.google.com/uc?export=download&id=1zPSXWwbmNwUV4OHFuKoILByx_hetPBXM)
     
 3. Make sure your files arrangment looks like the following
+
     Note that each of your dataset folder in `data` should split into three files, namely `train`, `test`, and `detect`.
     ```
     R-YOLOv4/
@@ -86,6 +88,7 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
                 └── ...png
     ```
 4. Train, Test, and Detect
+
     Please refer to `lib/options.py` to check out all the arguments.
     You can download the [weight](https://drive.google.com/uc?export=download&id=1UlewA9dcXsCiCbuvKCU6vL8AqSYeI3mj) that I trained from UCAS-AOD.
 
@@ -152,13 +155,11 @@ If you would like to use tensorboard for tracking traing process.
 #### UCAS_AOD
 
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/UCAS_AOD/P0292.png" alt="car" height="430"/>
-<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/UCAS_AOD/P0259.png" alt="plane" height="413"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/UCAS_AOD/P0769.png" alt="plane" height="413"/>
 
 #### DOTA
 
-<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/DOTA/P0006.png" alt="DOTA" height="430"/>
-
-<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/DOTA/P0031.png" alt="DOTA" height="430"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/DOTA/P0006.png" alt="DOTA" height="430"/><img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/DOTA/P0031.png" alt="DOTA" height="430"/>
 
 #### trash (custom dataset)
 
