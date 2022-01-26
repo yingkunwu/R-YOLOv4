@@ -24,7 +24,7 @@ Cosine Annealing with Warmup (Reference: [Cosine Annealing with Warmup for PyTor
 
 #### Recall
 <img src="https://i.imgur.com/mQf4S1m.png" alt="recall" height="300"/>
-As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1**. Therefore I used it for my loss function.
+As the paper suggested, I get a better results from `f(ariou) = exp(1-ariou)-1`. Therefore I used it for my loss function.
 
 ---
 
