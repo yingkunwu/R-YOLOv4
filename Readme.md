@@ -153,7 +153,7 @@ If you would like to use tensorboard for tracking traing process.
 
 #### DOTA
 
-DOTA have not been tested yet. (It's quite difficult to test it because of large file size)
+DOTA have not been tested yet. (It's quite difficult to test because of large resolution of images)
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/DOTA/P0006.png" alt="DOTA" height="430"/><img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/DOTA/P0031.png" alt="DOTA" height="430"/>
 
 #### trash (custom dataset)
