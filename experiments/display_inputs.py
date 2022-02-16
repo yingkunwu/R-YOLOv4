@@ -25,14 +25,13 @@ if __name__ == "__main__":
             bbox = np.int0(bbox)
             cv.drawContours(img, [bbox], 0, (255, 0, 0), 1)
 
-        img[:, 1:] = img[:, 1:] * 255.0
+        cv.imshow('My Image', img)
+        cv.waitKey(0)
+        cv.destroyAllWindows()
 
+        img[:, 1:] = img[:, 1:] * 255.0
         output_path = os.path.join("outputs", "display")
         if not os.path.exists(output_path):
-            os.mkdir(output_path)
-        
+            os.mkdir(output_path) 
         filename = os.path.join(output_path, img_path[0].split('/')[-1])
         cv.imwrite(filename, img)
-        #cv.imshow('My Image', img)
-        #cv.waitKey(0)
-        #cv.destroyAllWindows()
