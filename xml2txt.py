@@ -3,7 +3,7 @@ import glob
 import numpy as np
 import os
 import argparse
-
+from lib.utils import load_class_names
 
 def del_xml(files):
     for file in files:
@@ -13,6 +13,8 @@ def del_xml(files):
     print("Xml files were deleted.")
 
 def gen_txt(data_dir, files):
+    sub_dir=os.path.abspath(os.path.join(data_dir, ".."))
+    class_names = load_class_names(os.path.join(sub_dir, "class.names"))
     for file in files:
         tree = ET.parse(file)
         root = tree.getroot()
@@ -28,7 +30,7 @@ def gen_txt(data_dir, files):
                     a = a - np.pi
                 while a <= -np.pi:
                     a = a + np.pi
-                line_to_write = x + " " + y + " " + w + " " + h + " " + str(a) + " " + label + '\n'
+                line_to_write = x + " " + y + " " + w + " " + h + " " + str(a) + " " + str(class_names.index(label)) + '\n'
                 f.write(line_to_write)
 
     print("Finished converting xml to txt files.")
