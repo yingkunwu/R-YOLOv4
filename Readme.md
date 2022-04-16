@@ -86,7 +86,7 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
 
 I have implemented methods to load and train three different datasets. They are UCAS-AOD, DOTA, and custom dataset respectively. You can check out how I loaded those dataset into the model at [/datasets](https://github.com/kunnnnethan/R-YOLOv4/tree/main/datasets). The angle of each bounding box is limited in `(- pi/2,  pi/2]`, and the height of each bounding box is always longer than it's width.
 
-You can run [experiments/display_inputs.py](https://github.com/kunnnnethan/R-YOLOv4/blob/main/experiments/display_inputs.py) to visualize whether your data is loaded successfully.
+You can run [display_inputs.py](https://github.com/kunnnnethan/R-YOLOv4/blob/main/display_inputs.py) to visualize whether your data is loaded successfully.
 
 #### UCAS-AOD dataset
 
