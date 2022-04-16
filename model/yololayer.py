@@ -84,6 +84,10 @@ class YoloLayer(nn.Module):
         b, target_labels = target[:, :2].long().t()
         gi, gj = gxy.long().t()
 
+        # Avoid the error caused by the wrong position of the center coordinate of objects
+        gi = torch.clamp(gi, 0, nG - 1)
+        gj = torch.clamp(gj, 0, nG - 1)
+
         # Set masks to specify object's location
         obj_mask[b, best_n, gj, gi] = 1
         noobj_mask[b, best_n, gj, gi] = 0
