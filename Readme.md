@@ -162,7 +162,7 @@ DOTA have not been tested yet. (It's quite difficult to test because of large re
 | -------- | -------- | -------- | -------- |
 | YOLOv4 (smoothL1-iou) | 100.00 | 100.00 | 100.00|
 
-<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/478.jpg" alt="garbage1" height="410"/>
+<img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/480.jpg" alt="garbage1" height="410"/>
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/540.jpg" alt="garbage2" height="410"/>
 
 
