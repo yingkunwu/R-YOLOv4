@@ -158,7 +158,7 @@ DOTA have not been tested yet. (It's quite difficult to test because of large re
 
 #### trash (custom dataset)
 
-| Method | Plane | Car | mAP |
+| Method | Tetra Pak | Aluminum Can | mAP |
 | -------- | -------- | -------- | -------- |
 | YOLOv4 (smoothL1-iou) | 100.00 | 100.00 | 100.00|
 
