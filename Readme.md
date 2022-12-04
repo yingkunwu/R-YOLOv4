@@ -98,7 +98,8 @@ $ python train.py --dataset UCAS_AOD
 
 #### DOTA dataset
 
-Download the official dataset from [here](https://captain-whu.github.io/DOTA/dataset.html). The original files should be able to be loaded and trained by this model.
+Download the official dataset from [here](https://captain-whu.github.io/DOTA/dataset.html). The original files should be able to be loaded and trained by this model.</br>
+You can download the [weight](https://drive.google.com/uc?export=download&id=1XLYAKufkAbO2gLVpecFs3SbXVaJXTg-T) that I trained from DOTA.
 ```
 While training, please specify which dataset you are using.
 $ python train.py --dataset DOTA
