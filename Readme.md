@@ -47,7 +47,7 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
     ```
 
 2. Download  pretrained weights</br>
-    [weights](https://drive.google.com/uc?export=download&id=1zPSXWwbmNwUV4OHFuKoILByx_hetPBXM)
+    [weights](https://drive.google.com/uc?export=download&id=1ALVlt9d0tisl7zYOnT4y_HzBGINti6J8)
     
 3. Make sure your files arrangment looks like the following</br>
     Note that each of your dataset folder in `data` should split into three files, namely `train`, `test`, and `detect`.
@@ -90,7 +90,7 @@ You can run [display_inputs.py](https://github.com/kunnnnethan/R-YOLOv4/blob/mai
 #### UCAS-AOD dataset
 
 Please refer to [this repository](https://github.com/kunnnnethan/UCAS-AOD-benchmark) to rearrange files so that it can be loaded and trained by this model.</br>
-You can download the [weight](https://drive.google.com/uc?export=download&id=1UlewA9dcXsCiCbuvKCU6vL8AqSYeI3mj) that I trained from UCAS-AOD.
+You can download the [weight](https://drive.google.com/uc?export=download&id=1rcoiLWA5IXbvOhLSVcGg2tZDp1PBrbDT) that I trained from UCAS-AOD.
 ```
 While training, please specify which dataset you are using.
 $ python train.py --dataset UCAS_AOD
@@ -99,7 +99,7 @@ $ python train.py --dataset UCAS_AOD
 #### DOTA dataset
 
 Download the official dataset from [here](https://captain-whu.github.io/DOTA/dataset.html). The original files should be able to be loaded and trained by this model.</br>
-You can download the [weight](https://drive.google.com/uc?export=download&id=1XLYAKufkAbO2gLVpecFs3SbXVaJXTg-T) that I trained from DOTA.
+You can download the [weight](https://drive.google.com/uc?export=download&id=16ltIf5XRNxLVrWXtrWSkYaumakzCVayy) that I trained from DOTA.
 ```
 While training, please specify which dataset you are using.
 $ python train.py --dataset DOTA
@@ -113,8 +113,8 @@ $ python train.py --dataset DOTA
     ```python xml2txt.py --data_folder your-path --action gen_txt```
     2. delete xml files:
     ```python xml2txt.py --data_folder your-path --action del_xml```
-    
-A [trash](https://drive.google.com/uc?export=download&id=1jZHgezUkKExLjSXpALd3N8lXX5kvH_S-) custom dataset that I made and the [weight](https://drive.google.com/uc?export=download&id=1ppR__Un4NRHA8BDwpd9Qz7NAfh4fchwM) trained from it are provided for your convenience.
+
+A [trash](https://drive.google.com/uc?export=download&id=1Vs0bmVJVFE2XjQXMiljEPGxgzsQeckhM) custom dataset that I made and the [weight](https://drive.google.com/uc?export=download&id=1TL6qMlzMXERm-NWfV4SVJMUUUNtARum3) trained from it are provided for your convenience.
 ```
 While training, please specify which dataset you are using.
 $ python train.py --dataset custom
