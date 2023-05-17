@@ -114,7 +114,7 @@ $ python train.py --dataset DOTA
     2. delete xml files:
     ```python xml2txt.py --data_folder your-path --action del_xml```
 
-A [trash](https://drive.google.com/uc?export=download&id=1UpiBurcQr52ZDSjZZDzO6XsUzkWEwJ__) custom dataset that I made and the [weight](https://drive.google.com/uc?export=download&id=1YBDtCoRXEVkPQUUcfoChWKq8WVzm7IF-) trained from it are provided for your convenience.
+A [trash](https://drive.google.com/uc?export=download&id=1YBDtCoRXEVkPQUUcfoChWKq8WVzm7IF-) custom dataset that I made and the [weight](https://drive.google.com/uc?export=download&id=1UpiBurcQr52ZDSjZZDzO6XsUzkWEwJ__) trained from it are provided for your convenience.
 ```
 While training, please specify which dataset you are using.
 $ python train.py --dataset custom
