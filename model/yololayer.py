@@ -132,11 +132,11 @@ class YoloLayer(nn.Module):
         # anchor_masks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
         # strides = [8, 16, 32]
 
-        # output.shape-> [batch_size, num_anchors * (num_classes + 5), grid_size, grid_size]
+        # output.shape-> [batch_size, num_anchors * (num_classes + 6), grid_size, grid_size]
         device = output.device
         batch_size, grid_size = output.size(0), output.size(2)
 
-        # prediction.shape-> torch.Size([1, num_anchors, grid_size, grid_size, num_classes + 5])
+        # prediction.shape-> torch.Size([1, num_anchors, grid_size, grid_size, num_classes + 6])
         prediction = (
             output.view(batch_size, self.num_anchors, self.num_classes + 6, grid_size, grid_size)
                 .permute(0, 1, 3, 4, 2).contiguous()
@@ -147,8 +147,8 @@ class YoloLayer(nn.Module):
         pred_w = prediction[..., 2]
         pred_h = prediction[..., 3]
         pred_a = prediction[..., 4]
-        pred_conf = torch.sigmoid(prediction[..., 5])
-        pred_cls = torch.sigmoid(prediction[..., 6:])
+        pred_conf = torch.sigmoid(prediction[..., 5]) # objectness score
+        pred_cls = torch.sigmoid(prediction[..., 6:]) # confidence score of classses
 
         # grid.shape-> [1, 1, 52, 52, 1]
         # 預測出來的(pred_x, pred_y)是相對於每個cell左上角的點，因此這邊需要由左上角往右下角配合grid_size加上對應的offset，畫出的圖才會在正確的位置上
