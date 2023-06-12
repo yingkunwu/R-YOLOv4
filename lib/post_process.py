@@ -4,24 +4,48 @@ import numpy as np
 from shapely.geometry import Polygon
 
 
-def rbox2polygon(box):
-    x, y, w, h, theta = np.array(box)
-    points = cv.boxPoints(((x, y), (w, h), theta / np.pi * 180))
-    return Polygon(points)
-
-
 def skewiou(box1, box2):
     assert len(box1) == 5 and len(box2[0]) == 5
+
+    def rbox2polygon(box):
+        x, y, w, h, theta = np.array(box)
+        points = cv.boxPoints(((x, y), (w, h), theta / np.pi * 180))
+        return Polygon(points)
+
     iou = []
     g = rbox2polygon(box1)
     for i in range(len(box2)):
         p = rbox2polygon(box2[i])
+
         if not g.is_valid or not p.is_valid:
             raise AssertionError("something went wrong in skew iou")
+
         inter = g.intersection(p).area
         union = g.area + p.area - inter
+
         iou.append(torch.tensor(inter / (union + 1e-16)))
     return torch.stack(iou)
+
+
+def skewiou_2(box1, box2):
+    """
+    Return skew intersection-over-union of boxes.
+    Both sets of boxes are expected to be in (x, y, w, h, theta) format.
+    Arguments:
+        box1 (Tensor[N, 5])
+        box2 (Tensor[M, 5])
+    Returns:
+        skewiou (Tensor[N, M]): the NxM matrix containing the pairwise
+            SkewIoU values for every element in boxes1 and boxes2
+    """
+    assert len(box1[0]) == 5 and len(box2[0]) == 5
+
+    iou = torch.zeros([box1.shape[0], box2.shape[0]], dtype=torch.float)
+
+    for i, b1 in enumerate(box1):
+        iou[i] = skewiou(b1, box2)
+
+    return iou
 
 
 def post_process(prediction, conf_thres=0.5, nms_thres=0.4):
