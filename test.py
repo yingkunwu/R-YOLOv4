@@ -6,21 +6,22 @@ import glob
 from terminaltables import AsciiTable
 
 from lib.options import TestOptions
-from lib.post_process import post_process, skewiou
+from lib.post_process import post_process, skewiou_2
 from lib.load import load_data
 from lib.utils import load_class_names
 from model.yolo import Yolo
 
-# Reference: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/detect.py
 
 def ap_per_class(tp, conf, pred_cls, target_cls):
     """ Compute the average precision, given the recall and precision curves.
     Source: https://github.com/rafaelpadilla/Object-Detection-Metrics.
     # Arguments
-        tp:    True positives (list).
-        conf:  Objectness value from 0-1 (list).
-        pred_cls: Predicted object classes (list).
-        target_cls: True object classes (list).
+        tp:  True positives (nparray, nx1 or nx10).
+        conf:  Objectness value from 0-1 (nparray).
+        pred_cls:  Predicted object classes (nparray).
+        target_cls:  True object classes (nparray).
+        plot:  Plot precision-recall curve at mAP@0.5
+        save_dir:  Plot save directory
     # Returns
         The average precision as computed in py-faster-rcnn.
     """
@@ -31,109 +32,118 @@ def ap_per_class(tp, conf, pred_cls, target_cls):
 
     # Find unique classes
     unique_classes = np.unique(target_cls)
+    nc = unique_classes.shape[0]  # number of classes, number of detections
 
     # Create Precision-Recall curve and compute AP for each class
-    ap, p, r = [], [], []
-    for c in tqdm.tqdm(unique_classes, desc="Computing AP"):
+    px, py = np.linspace(0, 1, 1000), []  # for plotting
+    ap, p, r = np.zeros((nc, tp.shape[1])), np.zeros((nc, 1000)), np.zeros((nc, 1000))
+    for ci, c in enumerate(unique_classes):
         i = pred_cls == c
-        n_gt = (target_cls == c).sum()  # Number of ground truth objects
-        n_p = i.sum()  # Number of predicted objects
+        n_l = (target_cls == c).sum()  # number of labels
+        n_p = i.sum()  # number of predictions
 
-        if n_p == 0 and n_gt == 0:
+        if n_p == 0 or n_l == 0:
             continue
-        elif n_p == 0 or n_gt == 0:
-            ap.append(0)
-            r.append(0)
-            p.append(0)
         else:
             # Accumulate FPs and TPs
-            fpc = (1 - tp[i]).cumsum()
-            tpc = (tp[i]).cumsum()
+            fpc = (1 - tp[i]).cumsum(0)
+            tpc = tp[i].cumsum(0)
 
             # Recall
-            recall_curve = tpc / (n_gt + 1e-16)
-            r.append(recall_curve[-1])
+            recall = tpc / (n_l + 1e-16)  # recall curve
+            r[ci] = np.interp(-px, -conf[i], recall[:, 0], left=0)  # negative x, xp because xp decreases
 
             # Precision
-            precision_curve = tpc / (tpc + fpc)
-            p.append(precision_curve[-1])
+            precision = tpc / (tpc + fpc)  # precision curve
+            p[ci] = np.interp(-px, -conf[i], precision[:, 0], left=1)  # p at pr_score
 
             # AP from recall-precision curve
-            ap.append(compute_ap(recall_curve, precision_curve))
+            for j in range(tp.shape[1]):
+                ap[ci, j], mpre, mrec = compute_ap(recall[:, j], precision[:, j])
 
-    # Compute F1 score (harmonic mean of precision and recall)
-    p, r, ap = np.array(p), np.array(r), np.array(ap)
+    # Compute F1 (harmonic mean of precision and recall)
     f1 = 2 * p * r / (p + r + 1e-16)
 
-    return p, r, ap, f1, unique_classes.astype("int32")
+    i = f1.mean(0).argmax()  # max F1 index
+    return p[:, i], r[:, i], ap, f1[:, i], unique_classes.astype('int32')
 
 
 def compute_ap(recall, precision):
-    """ Compute the average precision, given the recall and precision curves.
-    Code originally from https://github.com/rbgirshick/py-faster-rcnn.
+    """ Compute the average precision, given the recall and precision curves
     # Arguments
-        recall:    The recall curve (list).
-        precision: The precision curve (list).
+        recall:    The recall curve (list)
+        precision: The precision curve (list)
+        v5_metric: Assume maximum recall to be 1.0, as in YOLOv5, MMDetetion etc.
     # Returns
-        The average precision as computed in py-faster-rcnn.
+        Average precision, precision curve, recall curve
     """
-    # correct AP calculation
-    # first append sentinel values at the end
-    mrec = np.concatenate(([0.0], recall, [1.0]))
-    mpre = np.concatenate(([0.0], precision, [0.0]))
 
-    # compute the precision envelope
-    for i in range(mpre.size - 1, 0, -1):
-        mpre[i - 1] = np.maximum(mpre[i - 1], mpre[i])
+    # Append sentinel values to beginning and end
+    # default YOLOv7 metric
+    mrec = np.concatenate(([0.], recall, [recall[-1] + 0.01]))
+    mpre = np.concatenate(([1.], precision, [0.]))
 
-    # to calculate area under PR curve, look for points
-    # where X axis (recall) changes value
-    i = np.where(mrec[1:] != mrec[:-1])[0]
+    # Compute the precision envelope
+    mpre = np.flip(np.maximum.accumulate(np.flip(mpre)))
 
-    # and sum (\Delta recall) * prec
-    ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])
-    return ap
+    # Integrate area under curve
+    method = 'interp'  # methods: 'continuous', 'interp'
+    if method == 'interp':
+        x = np.linspace(0, 1, 101)  # 101-point interp (COCO)
+        ap = np.trapz(np.interp(x, mrec, mpre), x)  # integrate
+    else:  # 'continuous'
+        i = np.where(mrec[1:] != mrec[:-1])[0]  # points where x axis (recall) changes
+        ap = np.sum((mrec[i + 1] - mrec[i]) * mpre[i + 1])  # area under curve
+
+    return ap, mpre, mrec
 
 
-def get_batch_statistics(outputs, targets, iou_threshold):
+def get_batch_statistics(outputs, targets, iouv, niou):
     """ Compute true positives, predicted scores and predicted labels per sample """
-    batch_metrics = []
-    for sample_i in range(len(outputs)):
+    batch_stats = []
+    for sample_i, pred in enumerate(outputs):
+        tar = targets[targets[:, 0] == sample_i, 1:]
+        nl = len(tar)
+        tcls = tar[:, 0].tolist() if nl else [] # target class
 
-        if outputs[sample_i] is None:
+        if len(pred) == 0:
+            if nl:
+                batch_stats.append((np.zeros((0, niou), dtype=bool), np.array(), np.array(), tcls))
             continue
 
-        output = outputs[sample_i]
-        pred_boxes = output[:, :5]
-        pred_scores = output[:, 5]
-        pred_labels = output[:, -1]
+        pred_boxes = pred[:, :5]
+        pred_scores = pred[:, 5]
+        pred_labels = pred[:, -1]
 
-        true_positives = np.zeros(pred_boxes.shape[0])
+        true_positives = np.zeros((pred.shape[0], niou), dtype=bool)
 
-        annotations = targets[targets[:, 0] == sample_i][:, 1:]
-        target_labels = annotations[:, 0] if len(annotations) else []
-        if len(annotations):
+        if nl:
             detected_boxes = []
-            target_boxes = annotations[:, 1:]
+            target_labels = tar[:, 0]
+            target_boxes = tar[:, 1:]
 
-            for pred_i, (pred_box, pred_label) in enumerate(zip(pred_boxes, pred_labels)):
+            for cls in np.unique(target_labels):
+                ti = np.nonzero(cls == target_labels).flatten()
+                pi = np.nonzero(cls == pred_labels).flatten()
 
-                # If targets are found break
-                if len(detected_boxes) == len(annotations):
-                    break
+                if pi.shape[0]:
+                    ious, i = skewiou_2(pred_boxes[pi], target_boxes[ti]).max(1) # best ious, indices
 
-                # Ignore if label is not one of the target labels
-                if pred_label not in target_labels:
-                    continue
+                    ious = ious.numpy()
 
-                iou, box_index = skewiou(pred_box, target_boxes).max(0)
-                if iou >= iou_threshold and box_index not in detected_boxes:
-                    true_positives[pred_i] = 1
-                    detected_boxes += [box_index]
+                    detected_set = set()
+                    for j in np.nonzero(ious > iouv[0])[0]:
+                        d = ti[i[j]] # detected target
+                        if d.item() not in detected_set:
+                            detected_set.add(d.item())
+                            detected_boxes.append(d)
+                            true_positives[pi[j]] = ious[j] > iouv
+                            if len(detected_boxes) == nl: # all targets already located in image
+                                break
 
-        #true_positives.sort()
-        batch_metrics.append([true_positives, pred_scores, pred_labels])
-    return batch_metrics
+        # Append statistics (tp, conf, pcls, tcls)
+        batch_stats.append((true_positives, pred_scores, pred_labels, tcls))
+    return batch_stats
 
 
 class Test:
@@ -160,17 +170,26 @@ class Test:
         self.model = self.model.to(self.device)
         self.model.load_state_dict(pretrained_dict)
 
-    def print_eval_stats(self, metrics_output):
-        if metrics_output is not None:
-            precision, recall, AP, f1, ap_class = metrics_output
-            # Prints class AP and mean AP
-            ap_table = [["Index", "Class", "AP"]]
-            for i, c in enumerate(ap_class):
-                ap_table += [[c, self.class_names[c], "%.5f" % AP[i]]]
-            print(AsciiTable(ap_table).table)
-            print(f"---- mAP {AP.mean():.5f} ----")
+    def calculate_eval_stats(self, stats, seen):
+        p, r, f1, mp, mr, map50, map = 0., 0., 0., 0., 0., 0., 0.
+        ap50, ap, ap_class = [], [], []
+
+        if len(stats) and stats[0].any():
+            p, r, ap, f1, ap_class = ap_per_class(*stats)
+            ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
+            mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+            nt = np.bincount(stats[3].astype(np.int64), minlength=len(self.class_names))  # number of targets per class
         else:
-            print("---- mAP not measured (no detections found by model) ----")
+            nt = torch.zeros(1)
+
+        # Print results
+        print(('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'Precision', 'Recall', 'mAP@.5', 'mAP@.5:.95'))
+
+        pf = '%20s' + '%12i' * 2 + '%12.3g' * 4  # print format
+        print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
+
+        for i, c in enumerate(ap_class):
+            print(pf % (self.class_names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
     def test(self):
         self.load_model()
@@ -182,31 +201,28 @@ class Test:
 
         print("Compute mAP...")
 
-        labels = []
-        sample_metrics = []  # List of tuples (TP, confs, pred)
-        for batch_i, (_, imgs, targets) in enumerate(test_dataloader):
-            print(_)
-            # Extract labels
-            labels += targets[:, 1].tolist()
-            # Rescale target
-            targets[:, 2:6] *= self.args.img_size
+        stats = []  # List of tuples (tp, conf, pcls, tcls)
+        iouv = np.linspace(0.5, 0.95, 10) # iou vector for mAP@0.5:0.95
+        niou = np.size(iouv)
+        seen = 0
 
+        for i, (_, imgs, targets) in enumerate(tqdm.tqdm(test_dataloader)):
             imgs = imgs.to(self.device)
+            seen += 1
 
             with torch.no_grad():
                 outputs, _ = self.model(imgs)
                 outputs = post_process(outputs, conf_thres=self.args.conf_thres, nms_thres=self.args.nms_thres)
 
-            sample_metrics += get_batch_statistics(outputs, targets, iou_threshold=self.args.iou_thres)
-
-        if len(sample_metrics) == 0:
-            assert False, "Something went wrong when loading data, data may not exist"
+            # Rescale target
+            targets[:, 2:6] *= self.args.img_size
+            # get sample statistics
+            stats += get_batch_statistics(outputs, targets, iouv, niou)
 
         # Concatenate sample statistics
-        true_positives, pred_scores, pred_labels = [np.concatenate(x, 0) for x in list(zip(*sample_metrics))]
-        metrics_output = ap_per_class(true_positives, pred_scores, pred_labels, labels)
-
-        self.print_eval_stats(metrics_output)
+        stats = [np.concatenate(x, 0) for x in list(zip(*stats))]
+        # Calculate mAP
+        self.calculate_eval_stats(stats, seen)
 
 
 if __name__ == "__main__":
