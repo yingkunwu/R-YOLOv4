@@ -6,6 +6,7 @@ import os
 import shutil
 import json
 from terminaltables import AsciiTable
+import logging
 
 from model.yolo import Yolo
 from lib.load import load_data

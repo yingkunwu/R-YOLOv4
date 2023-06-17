@@ -96,6 +96,7 @@ class YoloLayer(nn.Module):
         obj_mask[b, best_n, gj, gi] = 1
         noobj_mask[b, best_n, gj, gi] = 0
 
+        # TODO :: verify that the code here is correct
         # Set noobj mask to zero where iou exceeds ignore threshold
         for i, (anchor_ious, angle_offset) in enumerate(zip(arious.t(), offset.t())):
             noobj_mask[b[i], (anchor_ious > self.ignore_thresh), gj[i], gi[i]] = 0
@@ -161,8 +162,7 @@ class YoloLayer(nn.Module):
         grid_x = torch.arange(grid_size, device=device).repeat(grid_size, 1).view([1, 1, grid_size, grid_size])
         grid_y = torch.arange(grid_size, device=device).repeat(grid_size, 1).t().view([1, 1, grid_size, grid_size])
 
-        # anchor.shape-> [1, 3, 1, 1, 1]
-        # masked_anchors.shape = 18 x 3
+        # anchor.shape-> [1, 18, 1, 1, 1]
         masked_anchors = torch.tensor(self.masked_anchors, device=device)
         anchor_w = masked_anchors[:, 0].view([1, self.num_anchors, 1, 1])
         anchor_h = masked_anchors[:, 1].view([1, self.num_anchors, 1, 1])
