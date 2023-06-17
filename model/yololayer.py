@@ -136,12 +136,13 @@ class YoloLayer(nn.Module):
         device = output.device
         batch_size, grid_size = output.size(0), output.size(2)
 
-        # prediction.shape-> torch.Size([1, num_anchors, grid_size, grid_size, num_classes + 6])
+        # prediction.shape-> torch.Size([batch_size, num_anchors, grid_size, grid_size, num_classes + 6])
         prediction = (
             output.view(batch_size, self.num_anchors, self.num_classes + 6, grid_size, grid_size)
                 .permute(0, 1, 3, 4, 2).contiguous()
         )
 
+        # Eliminate grid sensitivity: pred_xy = scale_x_y * (pred_xy - 0.5) + 0.5
         pred_x = torch.sigmoid(prediction[..., 0]) * self.scale_x_y - (self.scale_x_y - 1) / 2
         pred_y = torch.sigmoid(prediction[..., 1]) * self.scale_x_y - (self.scale_x_y - 1) / 2
         pred_w = prediction[..., 2]
