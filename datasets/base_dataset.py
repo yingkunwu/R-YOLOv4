@@ -3,6 +3,7 @@ import random
 import os
 import numpy as np
 from PIL import Image
+import cv2
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
@@ -13,15 +14,19 @@ from lib.augmentations import vertical_flip, horisontal_flip, rotate, hsv, gauss
 
 def pad_to_square(img, pad_value):
     c, h, w = img.shape
-    dim_diff = np.abs(h - w)
-    # (upper / left) padding and (lower / right) padding
-    pad1, pad2 = dim_diff // 2, dim_diff - dim_diff // 2
+    # (upper / left) padding
+    pad = np.abs(h - w) // 2
     # Determine padding
-    pad = (0, 0, pad1, pad2) if h <= w else (pad1, pad2, 0, 0)
+    if h <= w:
+        padw = 0
+        padh = pad
+    else:
+        padw = pad
+        padh = 0
     # Add padding
-    img = F.pad(img, pad, "constant", value=pad_value)
+    img = F.pad(img, (padw, padw, padh, padh), "constant", value=pad_value)
 
-    return img, pad
+    return img, (padw, padh)
 
 
 def resize(image, size):
@@ -60,8 +65,7 @@ class BaseDataset(Dataset):
         self.img_size = img_size
         self.augment = augment
         self.mosaic = mosaic
-        self.mosaic_sample_size = sample_size
-        self.mosaic_border = [-self.mosaic_sample_size // 2, -self.mosaic_sample_size // 2]
+        self.mosaic_border = [-img_size // 2, -img_size // 2]
         self.multiscale = multiscale
         self.normalized_labels = normalized_labels
         self.min_size = self.img_size - 3 * 32
@@ -70,29 +74,33 @@ class BaseDataset(Dataset):
 
         self.img_files = None
         self.label_files = None
-        self.category = None
 
     def __getitem__(self, index):
         if self.mosaic:
-            img, targets = self.load_mosaic(index)
-            if np.random.random() < 0.1:
-                img2, targets2 = self.load_mosaic(index)
+            if random.random() < 0.8:
+                img, targets = self.load_mosaic(index)
+            else:
+                img, targets = self.load_mosaic9(index)
+
+            # TODO: 現在還不能做mixup augmentation, 因為mosaic的image size是self.image_size * 2, 但是mosaic9的image size是self.image_size * 3。 yolov7的官方code應該是有在mosaic後的perspective transform的轉換中把所有圖片的轉換弄到一樣的size，所以這邊可以跟下面的TODO一起做。
+            if np.random.random() < 0:
+                if random.random() < 0.8:
+                    img2, targets2 = self.load_mosaic(random.randint(0, len(self.img_files) - 1))
+                else:
+                    img2, targets2 = self.load_mosaic9(random.randint(0, len(self.img_files) - 1))
                 img, targets = mixup(img, targets, img2, targets2)
             img = transforms.ToTensor()(img)
 
         else:
-            img, (h, w) = self.load_image(index)
+            img, (h0, w0), (h, w) = self.load_image(index)
             img = transforms.ToTensor()(img)
             img, pad = pad_to_square(img, 0)
 
-            label_factor = (h, w) if self.normalized_labels else (1, 1)
-            padded_size = img.shape[1:]
-            boundary = (0, w, 0, h)
-
-            targets = self.load_target(index, label_factor, pad, padded_size, boundary)
+            targets = self.load_target(index, pad, (h0, w0), (h, w), img.shape[1:])
 
         # Apply augmentations
         if self.augment:
+            # TODO: add rotate, scale, and translate augmentation in one perespective transform function
             if np.random.random() < 0.5:
                 img, targets = rotate(img, targets)
             if np.random.random() < 0.5:
@@ -109,10 +117,11 @@ class BaseDataset(Dataset):
             boxes[:, 0] = i
         targets = torch.cat(targets, 0)
         # Selects new image size every tenth batch
-        if self.multiscale and self.batch_count % 10 == 0:
-            self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
+        #if self.multiscale and self.batch_count % 10 == 0:
+        #    self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
         # Resize images to input shape
-        imgs = torch.stack([resize(img, self.img_size) for img in imgs])
+        #imgs = torch.stack([resize(img, self.img_size) for img in imgs])
+        imgs = torch.stack(imgs)
         self.batch_count += 1
         return paths, imgs, targets
 
@@ -130,82 +139,24 @@ class BaseDataset(Dataset):
         if c != 3:
             img = np.transpose(np.stack(np.array([img, img, img])), (1, 2, 0))
 
+        r = self.img_size / max(h, w)  # resize image to img_size
+        if r != 1:  # always resize down, only resize up if training with augmentation
+            interp = cv2.INTER_AREA if r < 1 and not self.augment else cv2.INTER_LINEAR
+            img = cv2.resize(img, (int(w * r), int(h * r)), interpolation=interp)
+
         if self.augment:
             #img = gaussian_noise(img) # np.random.normal(mean, var ** 0.5, image.shape) would increase run time significantly
             hsv(img)
 
-        return img, (h, w)
+        return img, (h, w), img.shape[:2]
 
-    def load_mosaic(self, index):
-        """
-        Loads 1 image + 3 random images into a 4-image mosaic.
-        Each image is cropped based on the sameple_size.
-        A larger sample size means more information in each image would be used.
-        """
-
-        labels4 = []
-        s = self.mosaic_sample_size
-        yc, xc = [int(random.uniform(-x, 2 * s + x)) for x in self.mosaic_border]  # mosaic center x, y
-        indices = [index] + [random.randint(0, len(self.img_files) - 1) for _ in range(3)]  # 3 additional image indices
-        random.shuffle(indices)
-
-        h_padded, w_padded = s * 2, s * 2
-        padded_size = (h_padded, w_padded)
-
-        for i, index in enumerate(indices):
-            img, (h, w) = self.load_image(index)
-            label_factor = (h, w) if self.normalized_labels else (1, 1)
-
-            # place img in img4
-            if i == 0:  # top left
-                img4 = np.zeros((h_padded, w_padded, img.shape[2]), dtype=np.uint8)
-                x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
-                xt, yt = int(random.uniform((x2a - x1a), w)), int(random.uniform((y2a - y1a), h))
-                x1b, y1b, x2b, y2b = xt - (x2a - x1a), yt - (y2a - y1a), xt, yt  # xmin, ymin, xmax, ymax (small image)
-                padw = xc - x2b
-                padh = yc - y2b
-            elif i == 1:  # top right
-                x1a, y1a, x2a, y2a = xc, max(yc - h, 0), min(xc + w, s * 2), yc
-                xt, yt = int(random.uniform((x2a - x1a), w)), int(random.uniform((y2a - y1a), h))
-                x1b, y1b, x2b, y2b = xt - (x2a - x1a), yt - (y2a - y1a), xt, yt
-                padw = xc - x1b
-                padh = yc - y2b
-            elif i == 2:  # bottom left
-                x1a, y1a, x2a, y2a = max(xc - w, 0), yc, xc, min(s * 2, yc + h)
-                xt, yt = int(random.uniform((x2a - x1a), w)), int(random.uniform((y2a - y1a), h))
-                x1b, y1b, x2b, y2b = xt - (x2a - x1a), yt - (y2a - y1a), xt, yt
-                padw = xc - x2b
-                padh = yc - y1b
-            elif i == 3:  # bottom right
-                x1a, y1a, x2a, y2a = xc, yc, min(xc + w, s * 2), min(s * 2, yc + h)
-                xt, yt = int(random.uniform((x2a - x1a), w)), int(random.uniform((y2a - y1a), h))
-                x1b, y1b, x2b, y2b = xt - (x2a - x1a), yt - (y2a - y1a), xt, yt
-                padw = xc - x1b
-                padh = yc - y1b
-
-            img4[y1a:y2a, x1a:x2a, :] = img[y1b:y2b, x1b:x2b, :]  # img4[ymin:ymax, xmin:xmax]
-
-            # Labels
-            pad = (padw, padw, padh, padh)
-            boundary = (x1b, x2b, y1b, y2b)
-            targets = self.load_target(index, label_factor, pad, padded_size, boundary)
-            labels4.append(targets)
-
-        # Concat labels
-        if len(labels4):
-            labels4 = torch.cat(labels4, 0)
-
-        return img4, labels4
-
-
-    def load_target(self, index, label_factor, pad, padded_size, boundary):
+    def load_target(self, index, pad, img_size0, img_size, padded_size):
         """
         Args:
             index: index of label files going to be load
             label_factor: factor that resize labels to the same size with images
             pad: the amount of zero pixel value that are padded beside images
             padded_size: the size of images after padding
-            boundary: the boundary of targets
 
         Returns:
             Normalized labels of objects -> [batch_index, label, x, y, w, h, theta] -> torch.Size([num_targets, 7])
@@ -219,7 +170,7 @@ class BaseDataset(Dataset):
             if not num_targets:
                 return torch.zeros((0, 7))
 
-            # Check whether theta of oriented bounding boxes are within the boundary or not
+            # Check whether theta of oriented bounding boxes are within the defined range or not
             if not ((-np.pi / 2 < theta).all() or (theta <= np.pi / 2).all()):
                 raise AssertionError("Theta of oriented bounding boxes are not within the boundary (-pi / 2, pi / 2]")
 
@@ -233,54 +184,141 @@ class BaseDataset(Dataset):
                     else:
                         theta[i] = theta[i] + np.pi / 2
 
-            # Make the scale of coordinates to the same size of images
-            h_factor, w_factor = label_factor
-            x *= w_factor
-            y *= h_factor
-            w *= w_factor
-            h *= h_factor
+            # Normalizd coordinates if it has not been normalized yet
+            if not self.normalized_labels:
+                h0, w0 = img_size0
+                x /= w0
+                y /= h0
+                w /= w0
+                h /= h0
 
-            # Remove objects that exceed the size of images or the cropped area when doing mosaic augmentation
-            left_boundary, right_boundary, top_boundary, bottom_boundary = boundary
-            mask = torch.ones_like(x)
-            mask = torch.logical_and(mask, x > left_boundary)
-            mask = torch.logical_and(mask, x < right_boundary)
-            mask = torch.logical_and(mask, y > top_boundary)
-            mask = torch.logical_and(mask, y < bottom_boundary)
+            # Rescale the scale of coordinates to the same scale of self.img_size
+            h_, w_ = img_size
+            x *= w_
+            y *= h_
+            w *= w_
+            h *= h_
 
-            label = label[mask]
-            x = x[mask]
-            y = y[mask]
-            w = w[mask]
-            h = h[mask]
-            theta = theta[mask]
-
-            # Relocalize coordinates based on images padding or mosaic augmentation
-            x1 = (x - w / 2) + pad[0]
-            y1 = (y - h / 2) + pad[2]
-            x2 = (x + w / 2) + pad[1]
-            y2 = (y + h / 2) + pad[3]
-
-            # Normalized coordinates
+            # Relocalize coordinates based on images padding and Normalized coordinates
             padded_h, padded_w = padded_size
-            x = ((x1 + x2) / 2) / padded_w
-            y = ((y1 + y2) / 2) / padded_h
+            x = (x + pad[0]) / padded_w
+            y = (y + pad[1]) / padded_h
             w /= padded_w
             h /= padded_h
 
             targets = torch.zeros((len(label), 7))
-            targets[:, 1] = label
-            targets[:, 2] = x
-            targets[:, 3] = y
-            targets[:, 4] = w
-            targets[:, 5] = h
-            targets[:, 6] = theta
+            targets[:, 1:] = torch.vstack([label, x, y, w, h, theta]).T
+
+            # Remove objects that exceed the size of images (the cropped area) when doing mosaic augmentation
+            mask1 = torch.logical_and(targets[:, 2] > 0, targets[:, 2] < 1)
+            mask2 = torch.logical_and(targets[:, 3] > 0, targets[:, 3] < 1)
+            mask = torch.logical_and(mask1, mask2)
+            targets = targets[mask]
+
             return targets
 
         else:
             print(label_path)
             assert False, "Label file not found"
 
+    def load_mosaic(self, index):
+        """
+        Loads 1 image + 3 random images into a 4-image mosaic.
+        Each image is cropped based on the sameple_size.
+        A larger sample size means more information in each image would be used.
+        """
+
+        labels4 = []
+        s = self.img_size
+        yc, xc = [int(random.uniform(-x, 2 * s + x)) for x in self.mosaic_border] # mosaic center x, y
+        indices = [index] + random.choices(range(len(self.img_files)), k=3) # 3 additional image indices
+
+        padded_size = (s * 2, s * 2)
+
+        for i, index in enumerate(indices):
+            img, (h0, w0), (h, w) = self.load_image(index)
+
+            # place img in img4
+            if i == 0:  # top left
+                img4 = np.zeros((s * 2, s * 2, img.shape[2]), dtype=np.uint8)
+                # base image with 4 tiles
+                x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
+                x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
+            elif i == 1:  # top right
+                x1a, y1a, x2a, y2a = xc, max(yc - h, 0), min(xc + w, s * 2), yc
+                x1b, y1b, x2b, y2b = 0, h - (y2a - y1a), min(w, x2a - x1a), h
+            elif i == 2:  # bottom left
+                x1a, y1a, x2a, y2a = max(xc - w, 0), yc, xc, min(s * 2, yc + h)
+                x1b, y1b, x2b, y2b = w - (x2a - x1a), 0, w, min(y2a - y1a, h)
+            elif i == 3:  # bottom right
+                x1a, y1a, x2a, y2a = xc, yc, min(xc + w, s * 2), min(s * 2, yc + h)
+                x1b, y1b, x2b, y2b = 0, 0, min(w, x2a - x1a), min(y2a - y1a, h)
+
+            img4[y1a:y2a, x1a:x2a] = img[y1b:y2b, x1b:x2b]  # img4[ymin:ymax, xmin:xmax]
+
+            padw = x1a - x1b
+            padh = y1a - y1b
+
+            # Labels
+            pad = (padw, padh)
+            targets = self.load_target(index, pad, (h0, w0), (h, w), padded_size)
+            labels4.append(targets)
+
+        # Concat labels
+        labels4 = torch.cat(labels4, 0)
+
+        return img4, labels4
+    
+    def load_mosaic9(self, index):
+        # loads images in a 9-mosaic
+
+        labels9 = []
+        s = self.img_size
+        indices = [index] + random.choices(range(len(self.img_files)), k=8) # 8 additional image indices
+
+        padded_size = (s * 3, s * 3)
+
+        for i, index in enumerate(indices):
+            img, (h_, w_), (h, w) = self.load_image(index)
+
+            # place img in img9
+            if i == 0:  # center
+                img9 = np.zeros((s * 3, s * 3, img.shape[2]), dtype=np.uint8)  # base image with 4 tiles
+                h0, w0 = h, w
+                c = s, s, s + w, s + h  # xmin, ymin, xmax, ymax (base) coordinates
+            elif i == 1:  # top
+                c = s, s - h, s + w, s
+            elif i == 2:  # top right
+                c = s + wp, s - h, s + wp + w, s
+            elif i == 3:  # right
+                c = s + w0, s, s + w0 + w, s + h
+            elif i == 4:  # bottom right
+                c = s + w0, s + hp, s + w0 + w, s + hp + h
+            elif i == 5:  # bottom
+                c = s + w0 - w, s + h0, s + w0, s + h0 + h
+            elif i == 6:  # bottom left
+                c = s + w0 - wp - w, s + h0, s + w0 - wp, s + h0 + h
+            elif i == 7:  # left
+                c = s - w, s + h0 - h, s, s + h0
+            elif i == 8:  # top left
+                c = s - w, s + h0 - hp - h, s, s + h0 - hp
+
+            padx, pady = c[:2]
+            x1, y1, x2, y2 = [max(x, 0) for x in c]  # allocate coords
+
+            # Image
+            img9[y1:y2, x1:x2] = img[y1 - pady:, x1 - padx:]  # img9[ymin:ymax, xmin:xmax]
+            hp, wp = h, w  # height, width previous
+
+            # Labels
+            pad = (padx, pady)
+            targets = self.load_target(index, pad, (h_, w_), (h, w), padded_size)
+            labels9.append(targets)
+
+        # Concat labels
+        labels9 = torch.cat(labels9, 0)
+
+        return img9, labels9
 
     def load_files(self):
         raise NotImplementedError
