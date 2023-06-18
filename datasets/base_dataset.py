@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
-from lib.augmentations import vertical_flip, horisontal_flip, rotate, hsv, gaussian_noise, mixup
+from lib.augmentations import vertical_flip, horisontal_flip, rotate, hsv, gaussian_noise, mixup, random_warping
 
 
 def pad_to_square(img, pad_value):
@@ -78,7 +78,14 @@ class BaseDataset(Dataset):
             if np.random.random() < 0.1:
                 img2, targets2 = self.load_mosaic(index)
                 img, targets = mixup(img, targets, img2, targets2)
-            img = transforms.ToTensor()(img)
+
+            #if(np.random.random() < 0.5)
+            img, targets = random_warping(img, targets, scale = .5, translate = .1)
+            transform = transforms.Compose([
+                transforms.ToTensor()
+            ])
+            img = transform(img)
+            #print("After resizing",img.size())
 
         else:
             img, (h, w) = self.load_image(index)
@@ -99,6 +106,7 @@ class BaseDataset(Dataset):
                 img, targets = horisontal_flip(img, targets)
             if np.random.random() < 0.5:
                 img, targets = vertical_flip(img, targets)
+        #print("Final",img.size())
 
         return self.img_files[index], img, targets
 

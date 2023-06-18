@@ -145,8 +145,8 @@ class YoloLayer(nn.Module):
             output.view(batch_size, self.num_anchors, self.num_classes + 6, grid_size, grid_size)
                 .permute(0, 1, 3, 4, 2).contiguous()
         )
-
-        pred_x = torch.sigmoid(prediction[..., 0]) * self.scale_x_y - (self.scale_x_y - 1) / 2
+        
+        pred_x = torch.sigmoid(prediction[..., 0]) * self.scale_x_y - (self.scale_x_y - 1) / 2 
         pred_y = torch.sigmoid(prediction[..., 1]) * self.scale_x_y - (self.scale_x_y - 1) / 2
         pred_w = prediction[..., 2]
         pred_h = prediction[..., 3]
@@ -166,6 +166,8 @@ class YoloLayer(nn.Module):
         anchor_a = masked_anchors[:, 2].view([1, self.num_anchors, 1, 1])
 
         # decode
+        # pred_xy is predict within the cell, so we have to add the grid coord back
+        # this is in scale of downsample img
         pred_boxes = torch.empty((prediction[..., :5].shape), device=device)
         pred_boxes[..., 0] = (pred_x + grid_x)
         pred_boxes[..., 1] = (pred_y + grid_y)
