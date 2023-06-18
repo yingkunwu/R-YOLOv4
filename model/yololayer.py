@@ -48,7 +48,7 @@ class YoloLayer(nn.Module):
         self.metrics = {}
 
     def build_targets(self, pred_boxes, pred_cls, target, masked_anchors):
-        #num of (batches, anchors, grids, channals)
+        # num of (batches, anchors(3*6), downsample grid sizes, _ , classes)
         nB, nA, nG, _, nC = pred_cls.size()
         device = pred_boxes.device
         print("nB is {} nA is {}, nG is {}, nC is {}").format(nB,nA,nG,nC)
@@ -63,8 +63,10 @@ class YoloLayer(nn.Module):
         tcls = torch.zeros((nB, nA, nG, nG, nC), device=device)
 
         # Convert ground truth position to position that relative to the size of box (grid size)
-        print("target is:",target[:, :])
-        target_boxes = torch.cat((target[:, 2:6] * nG, target[:, 6:]), dim=-1) #(originally normalize w.r.t grids)
+
+        # target_boxes(x,y,w,h,a,...(classes))
+        target_boxes = torch.cat((target[:, 2:6] * nG, target[:, 6:]), dim=-1)#(originally normalize w.r.t grids)
+
         gxy = target_boxes[:, :2]
         gwh = target_boxes[:, 2:4]
         ga = target_boxes[:, 4]
@@ -85,6 +87,7 @@ class YoloLayer(nn.Module):
         best_ious, best_n = arious.max(0)
 
         # Separate target values
+        # b indicates which batch, target_labels is the class label (0 or 1)
         b, target_labels = target[:, :2].long().t()
         gi, gj = gxy.long().t()
 
@@ -93,9 +96,11 @@ class YoloLayer(nn.Module):
         gj = torch.clamp(gj, 0, nG - 1)
 
         # Set masks to specify object's location
+        # for img the row is y and col is x
         obj_mask[b, best_n, gj, gi] = 1
         noobj_mask[b, best_n, gj, gi] = 0
 
+        # TODO :: verify that the code here is correct
         # Set noobj mask to zero where iou exceeds ignore threshold
         for i, (anchor_ious, angle_offset) in enumerate(zip(arious.t(), offset.t())):
             noobj_mask[b[i], (anchor_ious > self.ignore_thresh), gj[i], gi[i]] = 0
@@ -140,13 +145,14 @@ class YoloLayer(nn.Module):
         device = output.device
         batch_size, grid_size = output.size(0), output.size(2)
 
-        # prediction.shape-> torch.Size([1, num_anchors, grid_size, grid_size, num_classes + 6])
+        # prediction.shape-> torch.Size([batch_size, num_anchors, grid_size, grid_size, num_classes + 6])
         prediction = (
             output.view(batch_size, self.num_anchors, self.num_classes + 6, grid_size, grid_size)
                 .permute(0, 1, 3, 4, 2).contiguous()
         )
-        
-        pred_x = torch.sigmoid(prediction[..., 0]) * self.scale_x_y - (self.scale_x_y - 1) / 2 
+
+        # Eliminate grid sensitivity: pred_xy = scale_x_y * (pred_xy - 0.5) + 0.5 (shifting center and scaling)
+        pred_x = torch.sigmoid(prediction[..., 0]) * self.scale_x_y - (self.scale_x_y - 1) / 2
         pred_y = torch.sigmoid(prediction[..., 1]) * self.scale_x_y - (self.scale_x_y - 1) / 2
         pred_w = prediction[..., 2]
         pred_h = prediction[..., 3]
@@ -156,10 +162,11 @@ class YoloLayer(nn.Module):
 
         # grid.shape-> [1, 1, 52, 52, 1]
         # 預測出來的(pred_x, pred_y)是相對於每個cell左上角的點，因此這邊需要由左上角往右下角配合grid_size加上對應的offset，畫出的圖才會在正確的位置上
+        # grid_xy is in size of downsample grid, this is to do sth like meshgrid to access the grid coord
         grid_x = torch.arange(grid_size, device=device).repeat(grid_size, 1).view([1, 1, grid_size, grid_size])
         grid_y = torch.arange(grid_size, device=device).repeat(grid_size, 1).t().view([1, 1, grid_size, grid_size])
 
-        # anchor.shape-> [1, 3, 1, 1, 1]
+        # anchor.shape-> [1, 18, 1, 1, 1]
         masked_anchors = torch.tensor(self.masked_anchors, device=device)
         anchor_w = masked_anchors[:, 0].view([1, self.num_anchors, 1, 1])
         anchor_h = masked_anchors[:, 1].view([1, self.num_anchors, 1, 1])

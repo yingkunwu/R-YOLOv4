@@ -30,7 +30,7 @@ def hsv(img, hgain=0.015, sgain=0.7, vgain=0.4):
 
 
 def mixup(img, labels, img2, labels2):
-    r = np.random.beta(32.0, 32.0)  # mixup ratio, alpha=beta=32.0
+    r = np.random.beta(8.0, 8.0)  # mixup ratio, alpha=beta=8.0
     img = (img * r + img2 * (1 - r)).astype(np.uint8)
     labels = torch.cat((labels, labels2), 0)
     return img, labels
