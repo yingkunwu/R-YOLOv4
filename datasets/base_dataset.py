@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
-from lib.augmentations import vertical_flip, horisontal_flip, rotate, hsv, gaussian_noise, mixup
+from lib.augmentations import vertical_flip, horisontal_flip, rotate, hsv, gaussian_noise, mixup, random_warping
 
 
 def pad_to_square(img, pad_value):
@@ -89,7 +89,12 @@ class BaseDataset(Dataset):
                 else:
                     img2, targets2 = self.load_mosaic9(random.randint(0, len(self.img_files) - 1))
                 img, targets = mixup(img, targets, img2, targets2)
-            img = transforms.ToTensor()(img)
+
+            transform = transforms.Compose([
+                transforms.ToTensor()
+            ])
+            img = transform(img)
+
 
         else:
             img, (h0, w0), (h, w) = self.load_image(index)
@@ -98,15 +103,20 @@ class BaseDataset(Dataset):
 
             targets = self.load_target(index, pad, (h0, w0), (h, w), img.shape[1:])
 
+
         # Apply augmentations
         if self.augment:
-            # TODO: add rotate, scale, and translate augmentation in one perespective transform function
+            if(np.random.random() < 0.5):
+                img, targets = random_warping(img, targets, scale = .5, translate = .1)
             if np.random.random() < 0.5:
                 img, targets = rotate(img, targets)
             if np.random.random() < 0.5:
                 img, targets = horisontal_flip(img, targets)
             if np.random.random() < 0.5:
                 img, targets = vertical_flip(img, targets)
+
+                
+
 
         return self.img_files[index], img, targets
 

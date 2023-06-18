@@ -38,6 +38,7 @@ class YoloLayer(nn.Module):
         # as stride = 16 -> [2.25, 4.6875, 4.75, 3.4375, 4.5, 9.125]
         # as stride = 32 -> [4.4375, 3.4375, 6.0, 7.59375, 14.34375, 12.53125]
         # ---------------------------------------------------------------------
+        # masked_anchors will have 18 anchors
         self.masked_anchors = [(a_w / self.stride, a_h / self.stride, a) for a_w, a_h in self.anchors for a in self.angles]
         self.reduction = "mean"
 
@@ -50,7 +51,7 @@ class YoloLayer(nn.Module):
         # num of (batches, anchors(3*6), downsample grid sizes, _ , classes)
         nB, nA, nG, _, nC = pred_cls.size()
         device = pred_boxes.device
-
+        print("nB is {} nA is {}, nG is {}, nC is {}").format(nB,nA,nG,nC)
         # Output tensors
         obj_mask = torch.zeros((nB, nA, nG, nG), device=device)
         noobj_mask = torch.ones((nB, nA, nG, nG), device=device)
@@ -62,8 +63,10 @@ class YoloLayer(nn.Module):
         tcls = torch.zeros((nB, nA, nG, nG, nC), device=device)
 
         # Convert ground truth position to position that relative to the size of box (grid size)
+
         # target_boxes(x,y,w,h,a,...(classes))
-        target_boxes = torch.cat((target[:, 2:6] * nG, target[:, 6:]), dim=-1)
+        target_boxes = torch.cat((target[:, 2:6] * nG, target[:, 6:]), dim=-1)#(originally normalize w.r.t grids)
+
         gxy = target_boxes[:, :2]
         gwh = target_boxes[:, 2:4]
         ga = target_boxes[:, 4]
@@ -77,9 +80,10 @@ class YoloLayer(nn.Module):
                 cos = torch.abs(torch.cos(torch.sub(anchor[2], ga)))
                 arious.append(ariou * cos)
                 offset.append(torch.abs(torch.sub(anchor[2], ga)))
+            print("arious without stack :", arious)
             arious = torch.stack(arious)
             offset = torch.stack(offset)
-
+        print("arious after stack :", arious)
         best_ious, best_n = arious.max(0)
 
         # Separate target values
@@ -169,6 +173,8 @@ class YoloLayer(nn.Module):
         anchor_a = masked_anchors[:, 2].view([1, self.num_anchors, 1, 1])
 
         # decode
+        # pred_xy is predict within the cell, so we have to add the grid coord back
+        # this is in scale of downsample img
         pred_boxes = torch.empty((prediction[..., :5].shape), device=device)
         pred_boxes[..., 0] = (pred_x + grid_x)
         pred_boxes[..., 1] = (pred_y + grid_y)
