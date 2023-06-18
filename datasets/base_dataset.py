@@ -79,13 +79,13 @@ class BaseDataset(Dataset):
                 img2, targets2 = self.load_mosaic(index)
                 img, targets = mixup(img, targets, img2, targets2)
 
-            #if(np.random.random() < 0.5)
-            img, targets = random_warping(img, targets, scale = .5, translate = .1)
+            if(np.random.random() < 0.5):
+                img, targets = random_warping(img, targets, scale = .5, translate = .1)
             transform = transforms.Compose([
                 transforms.ToTensor()
             ])
             img = transform(img)
-            #print("After resizing",img.size())
+
 
         else:
             img, (h, w) = self.load_image(index)
@@ -106,7 +106,7 @@ class BaseDataset(Dataset):
                 img, targets = horisontal_flip(img, targets)
             if np.random.random() < 0.5:
                 img, targets = vertical_flip(img, targets)
-        #print("Final",img.size())
+
 
         return self.img_files[index], img, targets
 
