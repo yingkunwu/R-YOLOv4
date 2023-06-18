@@ -59,7 +59,6 @@ def get_rot_mat(theta):
 
 
 def rotate(images, targets):
-    #print("initial targets", targets)
     degree = np.random.rand() * 90
     radian = np.pi / 180 * degree
     R = torch.stack([
@@ -74,9 +73,6 @@ def rotate(images, targets):
         torch.stack([torch.tensor(1), torch.tensor(0), torch.tensor(0.5)]),
         torch.stack([torch.tensor(0), torch.tensor(1), torch.tensor(0.5)]),
         torch.stack([torch.tensor(0), torch.tensor(0), torch.tensor(1)])]).reshape(3, 3)
-    #print("R", R)
-    #print("T1", T1)
-    #print("T2", T2)
 
     images = images.unsqueeze(0)
     rot_mat = get_rot_mat(radian)[None, ...].repeat(images.shape[0], 1, 1)
@@ -85,35 +81,34 @@ def rotate(images, targets):
     images = images.squeeze(0)
     # x,y of targets
     points = torch.cat([targets[:, 2:4], torch.ones(len(targets), 1)], dim=1)
-    #print("points before", points)
+
     points = points.T
     points = torch.matmul(T2, torch.matmul(R, torch.matmul(T1, points))).T
     targets[:, 2:4] = points[:, :2]
-    #print("target when assigning point",targets)
+
     # throwing away the bbox label of those surpass the boundary
     targets = targets[targets[:, 2] < 1]
     targets = targets[targets[:, 2] > 0]
     targets = targets[targets[:, 3] < 1]
     targets = targets[targets[:, 3] > 0]
     assert (targets[:, 2:4] > 0).all() or (targets[:, 2:4] < 1).all()
-    #print("target after those comparing",targets)
+
     targets[:, 6] = targets[:, 6] - radian
     targets[:, 6][targets[:, 6] <= -np.pi / 2] = targets[:, 6][targets[:, 6] <= -np.pi / 2] + np.pi
 
     assert (-np.pi / 2 < targets[:, 6]).all() or (targets[:, 6] <= np.pi / 2).all()
-    #print("target final",targets)
+
     return images, targets
 
+
 def random_warping(images, targets, scale = .5, translate = .1):
-
     c, h, w = images.shape[0], images.shape[1], images.shape[2]
-
 
     images = images.numpy()
     images = np.swapaxes(images,0,1)
     images = np.swapaxes(images,1,2)
 
-    # Rotation
+    # Rotation(Scaling)
 
     R = np.eye(3)
     # a = random.uniform(-180, 90)
@@ -155,7 +150,6 @@ def random_warping(images, targets, scale = .5, translate = .1):
     targets = targets[targets[:, 2] > 0]
     targets = targets[targets[:, 3] < 1]
     targets = targets[targets[:, 3] > 0]
-
 
     return output, targets
     #pass
