@@ -77,7 +77,7 @@ class BaseDataset(Dataset):
 
     def __getitem__(self, index):
         if self.mosaic:
-            if random.random() < 0.8:
+            if random.random() < 0.1:
                 img, targets = self.load_mosaic(index)
             else:
                 img, targets = self.load_mosaic9(index)
@@ -85,8 +85,7 @@ class BaseDataset(Dataset):
             if(np.random.random() < 0.5):
                 img, targets = random_warping(img, targets, scale = .5, translate = .1)
 
-            # TODO: 現在還不能做mixup augmentation, 因為mosaic的image size是self.image_size * 2, 但是mosaic9的image size是self.image_size * 3。 yolov7的官方code應該是有在mosaic後的perspective transform的轉換中把所有圖片的轉換弄到一樣的size，所以這邊可以跟下面的TODO一起做。
-            if np.random.random() < 0:
+            if np.random.random() < 0.5:
                 if random.random() < 0.8:
                     img2, targets2 = self.load_mosaic(random.randint(0, len(self.img_files) - 1))
                 else:
@@ -221,10 +220,7 @@ class BaseDataset(Dataset):
             targets[:, 1:] = torch.vstack([label, x, y, w, h, theta]).T
 
             # Remove objects that exceed the size of images (the cropped area) when doing mosaic augmentation
-            mask1 = torch.logical_and(targets[:, 2] > 0, targets[:, 2] < 1)
-            mask2 = torch.logical_and(targets[:, 3] > 0, targets[:, 3] < 1)
-            mask = torch.logical_and(mask1, mask2)
-            targets = targets[mask]
+            targets = self.filtering(targets)
 
             return targets
 
@@ -321,6 +317,7 @@ class BaseDataset(Dataset):
             img9[y1:y2, x1:x2] = img[y1 - pady:, x1 - padx:]  # img9[ymin:ymax, xmin:xmax]
             hp, wp = h, w  # height, width previous
 
+
             # Labels
             pad = (padx, pady)
             targets = self.load_target(index, pad, (h_, w_), (h, w), padded_size)
@@ -329,7 +326,30 @@ class BaseDataset(Dataset):
         # Concat labels
         labels9 = torch.cat(labels9, 0)
 
+        # Offset
+        yc, xc = [int(random.uniform(0, s)) for _ in self.mosaic_border]  # mosaic center x, y
+        img9 = img9[yc:yc + 2 * s, xc:xc + 2 * s]
+
+        # Concat/clip labels
+        labels9[:, 2] = (labels9[:, 2] * padded_size[0] - xc ) / (2 * s)
+        labels9[:, 3] = (labels9[:, 3] * padded_size[1] - yc ) / (2 * s)
+
+        # Remove objects that exceed the size of images (the cropped area) when doing mosaic augmentation
+        labels9 = self.filtering(labels9)
+
+        # rescale bbox to fit the croping size
+        labels9[:, 4:6] *= (3 / 2)
+
         return img9, labels9
 
     def load_files(self):
         raise NotImplementedError
+
+    def filtering(self,targets):
+        # Remove objects that exceed the size of images (the cropped area) when doing mosaic augmentation
+        mask1 = torch.logical_and(targets[:, 2] > 0, targets[:, 2] < 1)
+        mask2 = torch.logical_and(targets[:, 3] > 0, targets[:, 3] < 1)
+        mask = torch.logical_and(mask1, mask2)
+
+        return targets[mask]
+
