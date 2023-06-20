@@ -7,12 +7,16 @@ import shutil
 import json
 from terminaltables import AsciiTable
 import logging
+import tqdm
 
 from model.yolo import Yolo
 from lib.load import load_data
 from lib.scheduler import CosineAnnealingWarmupRestarts
 from lib.logger import *
 from lib.options import TrainOptions
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(format="%(message)s", level=logging.INFO)
 
 
 def weights_init_normal(m):
@@ -80,6 +84,9 @@ class Train:
     def log(self, total_loss, epoch, global_step, total_step, start_time):
         log = "\n---- [Epoch %d/%d] ----\n" % (epoch + 1, self.args.epochs)
 
+        # TODO: 以這個為格式，希望可以把每個epoch的資訊都顯示在這些title下面，然後一直到下一個epoch才換行，這邊其實也想參考yolov7的寫法，可以的話你可以先跑一次yolov7的看看，或是我跑然後螢幕錄影給你看。我已經有從153行開始改了，你可以從那邊繼續。
+        logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
+
         tensorboard_log = {}
         loss_table_name = ["Step: %d/%d" % (global_step, total_step),
                             "loss", "reg_loss", "conf_loss", "cls_loss"]
@@ -111,7 +118,7 @@ class Train:
 
         log += AsciiTable(loss_table).table
         log += "\nTotal Loss: %f, Runtime: %f\n" % (total_loss, time.time() - start_time)
-        print(log)
+        #print(log)
 
     def train(self):
         init()
@@ -142,8 +149,9 @@ class Train:
         start_time = time.time()
         self.model.train()
         for epoch in range(self.args.epochs):
-
-            for batch, (_, imgs, targets) in enumerate(train_dataloader):
+            
+            pbar = tqdm.tqdm(enumerate(train_dataloader))
+            for batch, (_, imgs, targets) in pbar:
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
                 targets = targets.to(self.device)
@@ -159,6 +167,7 @@ class Train:
                     scheduler.step()
 
                 self.log(total_loss, epoch, global_step, total_step, start_time)
+                pbar.set_description(batch)
         
             self.save_model()
             print("Model is saved!")

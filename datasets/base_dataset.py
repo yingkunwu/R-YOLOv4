@@ -82,12 +82,19 @@ class BaseDataset(Dataset):
             else:
                 img, targets = self.load_mosaic9(index)
 
+            if(np.random.random() < 0.5):
+                img, targets = random_warping(img, targets, scale = .5, translate = .1)
+
             # TODO: 現在還不能做mixup augmentation, 因為mosaic的image size是self.image_size * 2, 但是mosaic9的image size是self.image_size * 3。 yolov7的官方code應該是有在mosaic後的perspective transform的轉換中把所有圖片的轉換弄到一樣的size，所以這邊可以跟下面的TODO一起做。
             if np.random.random() < 0:
                 if random.random() < 0.8:
                     img2, targets2 = self.load_mosaic(random.randint(0, len(self.img_files) - 1))
                 else:
                     img2, targets2 = self.load_mosaic9(random.randint(0, len(self.img_files) - 1))
+
+                if(np.random.random() < 0.5):
+                    img, targets = random_warping(img, targets, scale = .5, translate = .1)
+
                 img, targets = mixup(img, targets, img2, targets2)
 
             transform = transforms.Compose([
@@ -103,20 +110,14 @@ class BaseDataset(Dataset):
 
             targets = self.load_target(index, pad, (h0, w0), (h, w), img.shape[1:])
 
-
         # Apply augmentations
         if self.augment:
-            if(np.random.random() < 0.5):
-                img, targets = random_warping(img, targets, scale = .5, translate = .1)
-            if np.random.random() < 0.5:
-                img, targets = rotate(img, targets)
+            #if np.random.random() < 0.5:
+            #    img, targets = rotate(img, targets)
             if np.random.random() < 0.5:
                 img, targets = horisontal_flip(img, targets)
             if np.random.random() < 0.5:
                 img, targets = vertical_flip(img, targets)
-
-                
-
 
         return self.img_files[index], img, targets
 

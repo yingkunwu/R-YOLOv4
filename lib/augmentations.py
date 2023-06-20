@@ -101,7 +101,7 @@ def rotate(images, targets):
     return images, targets
 
 
-def random_warping(images, targets, scale = .5, translate = .1):
+def random_warping(images, targets, scale = .9, translate = .1):
     c, h, w = images.shape[0], images.shape[1], images.shape[2]
 
     images = images.numpy()
@@ -111,12 +111,12 @@ def random_warping(images, targets, scale = .5, translate = .1):
     # Rotation(Scaling)
 
     R = np.eye(3)
-    # a = random.uniform(-180, 90)
-    # a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
+    a = random.uniform(0, 90)
+    #a += random.choice([-180, -90, 0, 90])  # add 90deg rotations to small rotations
 
-    s = random.uniform(1 - scale, 1 + scale + 0.2)
+    s = random.uniform(1 - scale, 1 + scale)
 
-    R[:2] = cv2.getRotationMatrix2D(angle=0, center=(w//2, h//2), scale=s)
+    R[:2] = cv2.getRotationMatrix2D(angle=a, center=(w//2, h//2), scale=s)
 
     # Translation
 
@@ -127,11 +127,11 @@ def random_warping(images, targets, scale = .5, translate = .1):
     M = T @ R
     output = cv2.warpPerspective(images, M, dsize=(w, h), borderValue=(0, 0, 0))
 
-    output = np.swapaxes(output,1,2)
-    output = np.swapaxes(output,0,1)
+    output = np.swapaxes(output, 1, 2)
+    output = np.swapaxes(output, 0, 1)
     output = torch.tensor(output)
 
-    M = torch.tensor(M,dtype=torch.double)
+    M = torch.tensor(M, dtype=torch.double)
     M[0, 2] = M[0, 2] / w
     M[1, 2] = M[1, 2] / h
 
@@ -150,6 +150,11 @@ def random_warping(images, targets, scale = .5, translate = .1):
     targets = targets[targets[:, 2] > 0]
     targets = targets[targets[:, 3] < 1]
     targets = targets[targets[:, 3] > 0]
+
+    targets[:, 6] = targets[:, 6] - a * np.pi / 180
+    targets[:, 6][targets[:, 6] <= -np.pi / 2] = targets[:, 6][targets[:, 6] <= -np.pi / 2] + np.pi
+
+    assert (-np.pi / 2 < targets[:, 6]).all() or (targets[:, 6] <= np.pi / 2).all()
 
     return output, targets
     #pass
