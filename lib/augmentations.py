@@ -102,11 +102,11 @@ def rotate(images, targets):
 
 
 def random_warping(images, targets, scale = .9, translate = .1):
-    c, h, w = images.shape[0], images.shape[1], images.shape[2]
+    h, w, c = images.shape[0], images.shape[1], images.shape[2]
 
-    images = images.numpy()
-    images = np.swapaxes(images,0,1)
-    images = np.swapaxes(images,1,2)
+    #images = images.numpy()
+    #images = np.swapaxes(images,0,1)
+    #images = np.swapaxes(images,1,2)
 
     # Rotation(Scaling)
 
@@ -127,9 +127,9 @@ def random_warping(images, targets, scale = .9, translate = .1):
     M = T @ R
     output = cv2.warpPerspective(images, M, dsize=(w, h), borderValue=(0, 0, 0))
 
-    output = np.swapaxes(output, 1, 2)
-    output = np.swapaxes(output, 0, 1)
-    output = torch.tensor(output)
+    #output = np.swapaxes(output, 1, 2)
+    #output = np.swapaxes(output, 0, 1)
+    #output = torch.tensor(output)
 
     M = torch.tensor(M, dtype=torch.double)
     M[0, 2] = M[0, 2] / w
