@@ -57,7 +57,7 @@ def post_process(prediction, conf_thres=0.5, nms_thres=0.4):
     Returns:
         (x1, y1, x2, y2, object_conf, class_score, class_pred)
     """
-    output = [None for _ in range(len(prediction))]
+    output = [[] for _ in range(len(prediction))]
     for batch, image_pred in enumerate(prediction):
         # Filter out confidence scores below threshold
         image_pred = image_pred[image_pred[:, 5] >= conf_thres]

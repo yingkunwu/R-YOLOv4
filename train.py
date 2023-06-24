@@ -45,12 +45,15 @@ class Train:
 
     def check_model_path(self):
         if os.path.exists(self.model_path):
-            inp = input(f">> Model name exists, do you want to override model name ? [y:N]")
-            if inp.lower()[0] == "y":
-                shutil.rmtree(self.model_path)
-            else:
-                print(">> Stop training!")
-                exit(1)
+            while True:
+                inp = input(f">> Model name exists, do you want to override the previous model? [Y:N]")
+                if inp.lower()[0] == "y":
+                    shutil.rmtree(self.model_path)
+                    break
+                elif inp.lower()[0] == "n":
+                    print(">> Stop training!")
+                    exit(0)
+                
         os.makedirs(self.model_path)
         os.makedirs(os.path.join(self.model_path, "logs"))
 
@@ -85,7 +88,7 @@ class Train:
         log = "\n---- [Epoch %d/%d] ----\n" % (epoch + 1, self.args.epochs)
 
         # TODO: 以這個為格式，希望可以把每個epoch的資訊都顯示在這些title下面，然後一直到下一個epoch才換行，這邊其實也想參考yolov7的寫法，可以的話你可以先跑一次yolov7的看看，或是我跑然後螢幕錄影給你看。我已經有從153行開始改了，你可以從那邊繼續。
-        logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
+        #logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
 
         tensorboard_log = {}
         loss_table_name = ["Step: %d/%d" % (global_step, total_step),
@@ -131,8 +134,8 @@ class Train:
         mosaic = False if self.args.no_mosaic else True
         multiscale = False if self.args.no_multiscale else True
 
-        train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size, self.args.sample_size,
-                                                        self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
+        train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size,
+                                                    self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
         scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
@@ -147,9 +150,12 @@ class Train:
                                                 gamma=1)
 
         start_time = time.time()
+
         self.model.train()
         for epoch in range(self.args.epochs):
-            
+            # -------------------
+            # ------ Train ------
+            # -------------------
             pbar = tqdm.tqdm(enumerate(train_dataloader))
             for batch, (_, imgs, targets) in pbar:
                 global_step = num_iters_per_epoch * epoch + batch + 1
@@ -167,10 +173,37 @@ class Train:
                     scheduler.step()
 
                 self.log(total_loss, epoch, global_step, total_step, start_time)
-                pbar.set_description(batch)
+                #s = ('%10s' * 2 + '%10.4g' * 6) % (
+                #    '%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
+                #pbar.set_description("I am dick")
         
             self.save_model()
             print("Model is saved!")
+
+            # -------------------
+            # ------ Valid ------
+            # -------------------
+            """self.model.eval()
+            pbar = tqdm.tqdm(enumerate(train_dataloader))
+            for batch, (_, imgs, targets) in pbar:
+                with torch.no_grad():
+                    global_step = num_iters_per_epoch * epoch + batch + 1
+                    imgs = imgs.to(self.device)
+                    targets = targets.to(self.device)
+
+                    outputs, loss = self.model(imgs, targets)
+                    outputs = post_process(outputs, conf_thres=self.args.conf_thres, nms_thres=self.args.nms_thres)
+
+                    loss.backward()
+                    total_loss = loss.detach().item()
+
+                    if global_step % self.args.subdivisions == 0:
+                        optimizer.step()
+                        optimizer.zero_grad()
+                        scheduler.step()
+        
+            self.save_model()
+            print("Model is saved!")"""
 
         print("Done!")
 

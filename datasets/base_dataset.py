@@ -105,6 +105,8 @@ class BaseDataset(Dataset):
         targets = self.normalize(targets, img.shape[:2])
         img = transforms.ToTensor()(img)
 
+        # TODO: reshpae image size to img_size
+
         # Apply augmentations
         if self.augment:
             if np.random.random() < 0.5:
@@ -125,8 +127,8 @@ class BaseDataset(Dataset):
         #if self.multiscale and self.batch_count % 10 == 0:
         #    self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
         # Resize images to input shape
-        #imgs = torch.stack([resize(img, self.img_size) for img in imgs])
-        imgs = torch.stack(imgs)
+        imgs = torch.stack([resize(img, self.img_size) for img in imgs])
+        #imgs = torch.stack(imgs)
         self.batch_count += 1
         return paths, imgs, targets
 

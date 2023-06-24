@@ -1,1 +1,1 @@
-python train.py --data_folder data/UCAS_AOD --model_name UCAS_AOD --number_of_classes 2 --batch_size 2 --img_size 608 --sample_size 640 --dataset UCAS_AOD --no_multiscale
+python train.py --data_folder data/UCAS_AOD --model_name tmp --number_of_classes 2 --batch_size 4 --img_size 416 --dataset UCAS_AOD --no_multiscale

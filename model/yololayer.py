@@ -51,7 +51,7 @@ class YoloLayer(nn.Module):
         # num of (batches, anchors(3*6), downsample grid sizes, _ , classes)
         nB, nA, nG, _, nC = pred_cls.size()
         device = pred_boxes.device
-        print("nB is {} nA is {}, nG is {}, nC is {}").format(nB,nA,nG,nC)
+
         # Output tensors
         obj_mask = torch.zeros((nB, nA, nG, nG), device=device)
         noobj_mask = torch.ones((nB, nA, nG, nG), device=device)
@@ -80,10 +80,8 @@ class YoloLayer(nn.Module):
                 cos = torch.abs(torch.cos(torch.sub(anchor[2], ga)))
                 arious.append(ariou * cos)
                 offset.append(torch.abs(torch.sub(anchor[2], ga)))
-            print("arious without stack :", arious)
             arious = torch.stack(arious)
             offset = torch.stack(offset)
-        print("arious after stack :", arious)
         best_ious, best_n = arious.max(0)
 
         # Separate target values
