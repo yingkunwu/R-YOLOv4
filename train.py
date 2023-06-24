@@ -7,6 +7,8 @@ import shutil
 import json
 #from terminaltables import AsciiTable
 import logging
+from colorlog import ColoredFormatter
+
 import tqdm
 
 from model.yolo import Yolo
@@ -15,9 +17,31 @@ from lib.scheduler import CosineAnnealingWarmupRestarts
 from lib.logger import *
 from lib.options import TrainOptions
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(format="%(message)s", level=logging.INFO)
 
+def setup_logger(log_file_path: str = None):
+    """Return a logger with a default ColoredFormatter."""
+    formatter = ColoredFormatter(
+        "%(asctime)s %(log_color)s%(levelname)-8s %(filename)s[line:%(lineno)d]: %(message)s",
+        datefmt='%Y-%m-%d %H:%M:%S',
+        reset=True,
+        log_colors={
+            'DEBUG': 'blue',
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
+            'CRITICAL': 'red',
+        })
+
+    logger = logging.getLogger(__name__)
+    shandler = logging.StreamHandler()
+    shandler.setFormatter(formatter)
+    shandler.setLevel(level=logging.INFO)
+
+    logger.addHandler(shandler)
+    logger.setLevel(level=logging.INFO)
+    return logger
+
+logger = setup_logger()
 
 def weights_init_normal(m):
     if isinstance(m, torch.nn.Conv2d):
@@ -177,13 +201,13 @@ class Train:
                                                 warmup_steps=round(scheduler_iters * 0.1),
                                                 cycle_mult=1,
                                                 gamma=1)
-        logger.info(f'Image sizes {self.args.img_size}\n'
-                f'Starting training for {self.args.epochs} epochs...')
+        logger.info(f'Image sizes {self.args.img_size}')
+        logger.info(f'Starting training for {self.args.epochs} epochs...')
 
         start_time = time.time()
         self.model.train()
         for epoch in range(self.args.epochs):
-            logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
+            logger.critical(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
             pbar = enumerate(train_dataloader)
             pbar = tqdm.tqdm(pbar,total=len(train_dataloader))
             for batch, (_, imgs, targets) in pbar:
