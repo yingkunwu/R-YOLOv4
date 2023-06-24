@@ -49,7 +49,7 @@ class Train:
             if inp.lower()[0] == "y":
                 shutil.rmtree(self.model_path)
             else:
-                print(">> Stop training!")
+                logger.debug(">> Stop training!")
                 exit(1)
         os.makedirs(self.model_path)
         os.makedirs(os.path.join(self.model_path, "logs"))
@@ -92,19 +92,18 @@ class Train:
 
 
         for name, metric in self.model.yolo1.metrics.items():
-            print(name,metric)
             if name in loss_dict:
-                loss_dict[name] += metric.float()
+                loss_dict[name] += metric
             tensorboard_log[f"{name}_1"] = metric
 
         for name, metric in self.model.yolo2.metrics.items():
             if name in loss_dict:
-                loss_dict[name] += metric.float()
+                loss_dict[name] += metric
             tensorboard_log[f"{name}_2"] = metric
 
         for name, metric in self.model.yolo3.metrics.items():
             if name in loss_dict:
-                loss_dict[name] += metric.float()
+                loss_dict[name] += metric
             tensorboard_log[f"{name}_3"] = metric
 
 
@@ -161,9 +160,12 @@ class Train:
         mosaic = False if self.args.no_mosaic else True
         multiscale = False if self.args.no_multiscale else True
 
-        train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size, self.args.sample_size,
-                                                        self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
+        # train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size, self.args.sample_size,
+        #                                                 self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
+        train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size,
+                                                    self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
+        #print(num_iters_per_epoch)
         scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
 
@@ -182,7 +184,8 @@ class Train:
         self.model.train()
         for epoch in range(self.args.epochs):
             logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
-            pbar = tqdm.tqdm(enumerate(train_dataloader),total=len(train_dataloader))
+            pbar = enumerate(train_dataloader)
+            pbar = tqdm.tqdm(pbar,total=len(train_dataloader))
             for batch, (_, imgs, targets) in pbar:
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
@@ -199,19 +202,19 @@ class Train:
                     scheduler.step()
 
                 loss_dict = self.logging_processes(total_loss, epoch, global_step, total_step, start_time)
-                print(loss_dict)
-                s = ('%10s' * 2 + '%10.4g' * 5) % (
+                
+                s = ('%10s'  + '%10.4g' * 5) % (
                     '%g/%g' % (epoch, self.args.epochs),  loss_dict["reg_loss"],
                     loss_dict["conf_loss"],loss_dict["cls_loss"], total_loss, imgs.shape[-1])
-                #pbar.set_description(batch)
-                print(s)
+
                 pbar.set_description(s)
-                pbar.refresh()
+                pbar.update(0)
         
             self.save_model()
-            print("Model is saved!")
+            logger.info("Model is saved!")
 
-        print("Done!")
+        logger.info("Done!")
+
 
 if __name__ == "__main__":
     parser = TrainOptions()
