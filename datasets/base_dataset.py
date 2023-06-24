@@ -99,7 +99,9 @@ class BaseDataset(Dataset):
             img, pad = pad_to_square(img, 0)
 
             targets = self.load_target(index, pad, (h0, w0), (h, w), img.shape[:2])
-            img, targets = random_warping(img, targets, scale = .5, translate = .1)
+            
+            if self.augment:
+                img, targets = random_warping(img, targets, scale = .5, translate = .1)
 
         targets = self.filtering(targets, img.shape[:2])
         targets = self.normalize(targets, img.shape[:2])

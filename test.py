@@ -161,7 +161,7 @@ def calculate_eval_stats(stats, num_classes):
         return nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map
 
 
-def test(model, device, data_folder, dataset, img_size, batch_size, conf_thres, nms_thres, class_names):
+def test(model, device, class_names, data_folder, dataset, img_size, batch_size, conf_thres, nms_thres):
     model.eval()
 
     # Get dataloader
@@ -174,19 +174,30 @@ def test(model, device, data_folder, dataset, img_size, batch_size, conf_thres, 
     iouv = np.linspace(0.5, 0.95, 10) # iou vector for mAP@0.5:0.95
     niou = np.size(iouv)
     seen = 0
+    total_loss = 0
+    total_loss_items = {}
 
     for i, (_, imgs, targets) in enumerate(tqdm.tqdm(test_dataloader)):
         imgs = imgs.to(device)
+        targets = targets.to(device)
         seen += 1
 
         with torch.no_grad():
-            outputs, loss = model(imgs)
+            outputs, loss, loss_items = model(imgs, targets)
             outputs = post_process(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+
+            total_loss += loss.detach().item()
+
+            for item in loss_items:
+                if item in total_loss_items:
+                    total_loss_items[item] += loss_items[item]
+                else:
+                    total_loss_items[item] = loss_items[item]
 
         # Rescale target
         targets[:, 2:6] *= img_size
         # get sample statistics
-        stats += get_batch_statistics(outputs, targets, iouv, niou)
+        stats += get_batch_statistics(outputs, targets.detach().cpu(), iouv, niou)
 
     # Concatenate sample statistics
     stats = [np.concatenate(x, 0) for x in list(zip(*stats))]
@@ -202,7 +213,7 @@ def test(model, device, data_folder, dataset, img_size, batch_size, conf_thres, 
     for i, c in enumerate(ap_class):
         print(pf % (class_names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
-    return mp, mr, map50, map
+    return mp, mr, map50, map, total_loss, total_loss_items
 
 
 class Test:
@@ -232,8 +243,8 @@ class Test:
     def run(self):
         self.load_model()
 
-        test(self.model, self.device, self.args.data_folder, self.args.dataset, self.args.img_size, self.args.batch_size, 
-                self.args.conf_thres, self.args.nms_thres, self.class_names)
+        test(self.model, self.device, self.class_names, self.args.data_folder, self.args.dataset, 
+                self.args.img_size, self.args.batch_size, self.args.conf_thres, self.args.nms_thres)
 
 
 

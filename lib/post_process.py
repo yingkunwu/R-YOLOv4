@@ -4,6 +4,41 @@ import numpy as np
 from shapely.geometry import Polygon
 
 
+def xywh2xyxy(x):
+    y = x.new(x.shape)
+    y[..., 0] = x[..., 0] - x[..., 2] / 2
+    y[..., 1] = x[..., 1] - x[..., 3] / 2
+    y[..., 2] = x[..., 0] + x[..., 2] / 2
+    y[..., 3] = x[..., 1] + x[..., 3] / 2
+    return y
+
+
+def iou(box1, box2, nms_thres):
+    assert len(box1) == 5 and len(box2[0]) == 5
+
+    area1 = box1[2] * box1[3]
+    area2 = box2[:, 2] * box2[:, 3]
+
+    box1_ = xywh2xyxy(box1)
+    box2_ = xywh2xyxy(box2)
+
+    inter_min_xy = torch.max(box1_[:2], box2_[:, :2])
+    inter_max_xy = torch.min(box1_[2:4], box2_[:, 2:4])
+
+    inter = torch.clamp((inter_max_xy - inter_min_xy), min=0)
+    inter_area = inter[:, 0] * inter[:, 1]
+    union = area1 + area2 - inter_area
+
+    iou = inter_area / (union + 1e-15)
+
+    mask = iou > 0.3
+    large_overlap = torch.zeros(box2.shape[0], dtype=torch.bool)
+
+    large_overlap[mask] = skewiou(box1, box2[mask]) > nms_thres
+
+    return large_overlap
+
+
 def skewiou(box1, box2):
     assert len(box1) == 5 and len(box2[0]) == 5
 
@@ -58,16 +93,23 @@ def post_process(prediction, conf_thres=0.5, nms_thres=0.4):
         (x1, y1, x2, y2, object_conf, class_score, class_pred)
     """
     output = [[] for _ in range(len(prediction))]
+
+    # Settings
+    max_nms = 500 # maximum number of boxes for nms processing
+    max_det = 300 # maximum number of detections per image
+
     for batch, image_pred in enumerate(prediction):
         # Filter out confidence scores below threshold
         image_pred = image_pred[image_pred[:, 5] >= conf_thres]
         # If none are remaining => process next image
-        if not image_pred.size(0):
+        if not image_pred.shape[0]:
             continue
         # Object confidence times class confidence
         score = image_pred[:, 5] * image_pred[:, 6:].max(1)[0]
         # Sort by it
-        image_pred = image_pred[(-score).argsort()]
+        image_pred = image_pred[(score).argsort(descending=True)]
+        if image_pred.shape[0] > max_nms:
+            image_pred = image_pred[:max_nms]
         class_confs, class_preds = image_pred[:, 6:].max(1, keepdim=True)  # class_preds-> index of classes
         detections = torch.cat((image_pred[:, :6], class_confs.float(), class_preds.float()), 1).detach().cpu()
 
@@ -77,14 +119,19 @@ def post_process(prediction, conf_thres=0.5, nms_thres=0.4):
         for label in labels:
             detect = detections[detections[:, -1] == label]
             while len(detect):
-                large_overlap = skewiou(detect[0, :5], detect[:, :5].detach()) > nms_thres
+                #large_overlap = skewiou(detect[0, :5], detect[:, :5]) > nms_thres
+                large_overlap = iou(detect[0, :5], detect[:, :5], nms_thres)
                 # Indices of boxes with lower confidence scores, large IOUs and matching labels
                 weights = detect[large_overlap, 5:6]
                 # Merge overlapping bboxes by order of confidence
                 detect[0, :4] = (weights * detect[large_overlap, :4]).sum(0) / weights.sum()
                 keep_boxes += [detect[0]]
                 detect = detect[~large_overlap]
-            if keep_boxes:
-                output[batch] = torch.stack(keep_boxes)
+
+        if keep_boxes:
+            keep_boxes = torch.stack(keep_boxes)
+            if keep_boxes.shape[0] > max_det:
+                keep_boxes = keep_boxes[:max_det]
+            output[batch] = keep_boxes
 
     return output

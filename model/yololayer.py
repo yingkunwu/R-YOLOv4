@@ -45,7 +45,6 @@ class YoloLayer(nn.Module):
         self.lambda_coord = 1.0
         self.lambda_conf_scale = 10.0
         self.lambda_cls_scale = 1.0
-        self.metrics = {}
 
     def build_targets(self, pred_boxes, pred_cls, target, masked_anchors):
         # num of (batches, anchors(3*6), downsample grid sizes, _ , classes)
@@ -222,29 +221,25 @@ class YoloLayer(nn.Module):
             reg_loss = self.lambda_coord * reg_loss
             conf_loss = self.lambda_conf_scale * conf_loss
             cls_loss = self.lambda_cls_scale * cls_loss
-            total_loss = reg_loss + conf_loss + cls_loss
+            loss = reg_loss + conf_loss + cls_loss
 
             # --------------------
             # -   Logging Info   -
             # --------------------
-            cls_acc = 100 * class_mask[obj_mask].mean()
-            conf50 = (pred_conf > 0.5).float()
-            iou50 = (iou_scores > 0.5).float()
-            iou75 = (iou_scores > 0.75).float()
-            detected_mask = conf50 * class_mask * tconf
-            precision = torch.sum(iou50 * detected_mask) / (conf50.sum() + 1e-16)
-            recall50 = torch.sum(iou50 * detected_mask) / (obj_mask.sum() + 1e-16)
-            recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
+            #cls_acc = 100 * class_mask[obj_mask].mean()
+            #conf50 = (pred_conf > 0.5).float()
+            #iou50 = (iou_scores > 0.5).float()
+            #iou75 = (iou_scores > 0.75).float()
+            #detected_mask = conf50 * class_mask * tconf
+            #precision = torch.sum(iou50 * detected_mask) / (conf50.sum() + 1e-16)
+            #recall50 = torch.sum(iou50 * detected_mask) / (obj_mask.sum() + 1e-16)
+            #recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
 
-            self.metrics = {
-                "loss": to_cpu(total_loss).item(),
+            loss_items = {
+                "loss": to_cpu(loss).item(),
                 "reg_loss": to_cpu(reg_loss).item(),
                 "conf_loss": to_cpu(conf_loss).item(),
                 "cls_loss": to_cpu(cls_loss).item(),
-                "cls_acc": to_cpu(cls_acc).item(),
-                "recall50": to_cpu(recall50).item(),
-                "recall75": to_cpu(recall75).item(),
-                "precision": to_cpu(precision).item(),
             }
 
-            return output, total_loss
+            return output, loss, loss_items

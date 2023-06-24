@@ -5,7 +5,6 @@ import torch
 import os
 import shutil
 import json
-from terminaltables import AsciiTable
 import logging
 import tqdm
 
@@ -14,6 +13,8 @@ from lib.load import load_data
 from lib.scheduler import CosineAnnealingWarmupRestarts
 from lib.logger import *
 from lib.options import TrainOptions
+from lib.utils import load_class_names
+from test import test
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(format="%(message)s", level=logging.INFO)
@@ -35,11 +36,18 @@ def init():
     torch.backends.cudnn.benchmark = False
 
 
+def fitness(x):
+    # Model fitness as a weighted combination of metrics
+    w = [0.0, 0.0, 0.1, 0.9]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
+    return (x * w).sum(0)
+
+
 class Train:
     def __init__(self, args):
         self.args = args
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model_path = os.path.join("weights", self.args.model_name)
+        self.class_names = load_class_names(os.path.join(self.args.data_folder, "class.names"))
         self.model = None
         self.logger = None
 
@@ -73,8 +81,8 @@ class Train:
         self.model.apply(weights_init_normal)  # 權重初始化
         self.model.load_state_dict(model_dict)
 
-    def save_model(self):
-        save_folder = os.path.join(self.model_path, "ryolov4.pth")
+    def save_model(self, postfix):
+        save_folder = os.path.join(self.model_path, "ryolov4_{}.pth".format(postfix))
         torch.save(self.model.state_dict(), save_folder)
 
     def save_opts(self):
@@ -92,34 +100,34 @@ class Train:
 
         tensorboard_log = {}
         loss_table_name = ["Step: %d/%d" % (global_step, total_step),
-                            "loss", "reg_loss", "conf_loss", "cls_loss"]
-        loss_table = [loss_table_name]
+                           "loss", "reg_loss", "conf_loss", "cls_loss"]
+        #loss_table = [loss_table_name]
 
         temp = ["YoloLayer1"]
         for name, metric in self.model.yolo1.metrics.items():
             if name in loss_table_name:
                 temp.append(metric)
             tensorboard_log[f"{name}_1"] = metric
-        loss_table.append(temp)
+        #loss_table.append(temp)
 
         temp = ["YoloLayer2"]
         for name, metric in self.model.yolo2.metrics.items():
             if name in loss_table_name:
                 temp.append(metric)
             tensorboard_log[f"{name}_2"] = metric
-        loss_table.append(temp)
+        #loss_table.append(temp)
 
         temp = ["YoloLayer3"]
         for name, metric in self.model.yolo3.metrics.items():
             if name in loss_table_name:
                 temp.append(metric)
             tensorboard_log[f"{name}_3"] = metric
-        loss_table.append(temp)
+        #loss_table.append(temp)
 
         tensorboard_log["total_loss"] = total_loss
         self.logger.list_of_scalars_summary(tensorboard_log, global_step)
 
-        log += AsciiTable(loss_table).table
+        #log += AsciiTable(loss_table).table
         log += "\nTotal Loss: %f, Runtime: %f\n" % (total_loss, time.time() - start_time)
         #print(log)
 
@@ -150,19 +158,20 @@ class Train:
                                                 gamma=1)
 
         start_time = time.time()
+        best_fitness = 0
 
-        self.model.train()
         for epoch in range(self.args.epochs):
             # -------------------
             # ------ Train ------
             # -------------------
-            pbar = tqdm.tqdm(enumerate(train_dataloader))
-            for batch, (_, imgs, targets) in pbar:
+            self.model.train()
+            #pbar = tqdm.tqdm(enumerate(train_dataloader))
+            for batch, (_, imgs, targets) in enumerate(tqdm.tqdm(train_dataloader)):
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
                 targets = targets.to(self.device)
 
-                outputs, loss = self.model(imgs, targets)
+                outputs, loss, loss_items = self.model(imgs, targets)
 
                 loss.backward()
                 total_loss = loss.detach().item()
@@ -172,38 +181,21 @@ class Train:
                     optimizer.zero_grad()
                     scheduler.step()
 
-                self.log(total_loss, epoch, global_step, total_step, start_time)
-                #s = ('%10s' * 2 + '%10.4g' * 6) % (
-                #    '%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
-                #pbar.set_description("I am dick")
-        
-            self.save_model()
-            print("Model is saved!")
+                #self.log(total_loss, epoch, global_step, total_step, start_time)
+            self.save_model("last")
 
             # -------------------
             # ------ Valid ------
             # -------------------
-            """self.model.eval()
-            pbar = tqdm.tqdm(enumerate(train_dataloader))
-            for batch, (_, imgs, targets) in pbar:
-                with torch.no_grad():
-                    global_step = num_iters_per_epoch * epoch + batch + 1
-                    imgs = imgs.to(self.device)
-                    targets = targets.to(self.device)
+            mp, mr, map50, map, loss, loss_items = test(self.model, self.device, self.class_names, self.args.data_folder, 
+                                self.args.dataset, self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65)
 
-                    outputs, loss = self.model(imgs, targets)
-                    outputs = post_process(outputs, conf_thres=self.args.conf_thres, nms_thres=self.args.nms_thres)
+            fit = fitness(np.array([mp, mr, map50, map]))
+            if fit > best_fitness:
+                best_fitness = fit
+                self.save_model("best")
+                print("Current best model is saved!")
 
-                    loss.backward()
-                    total_loss = loss.detach().item()
-
-                    if global_step % self.args.subdivisions == 0:
-                        optimizer.step()
-                        optimizer.zero_grad()
-                        scheduler.step()
-        
-            self.save_model()
-            print("Model is saved!")"""
 
         print("Done!")
 
