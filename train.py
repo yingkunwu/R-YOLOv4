@@ -5,7 +5,7 @@ import torch
 import os
 import shutil
 import json
-from terminaltables import AsciiTable
+#from terminaltables import AsciiTable
 import logging
 import tqdm
 
@@ -80,11 +80,42 @@ class Train:
         to_save = self.args.__dict__.copy()
         with open(os.path.join(self.model_path, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
+    
 
-    def log(self, total_loss, epoch, global_step, total_step, start_time):
+    def logging_processes(self, total_loss, epoch, global_step, total_step, start_time)->dict:
+        #log = "\n---- [Epoch %d/%d] ----\n" % (epoch + 1, self.args.epochs)
+        tensorboard_log = {}
+        #loss_table_name = ["Step: %d/%d" % (global_step, total_step),
+        #                   "loss", "reg_loss", "conf_loss", "cls_loss"]
+
+        loss_dict = {"cls_loss" : 0.0, "conf_loss": 0.0, "reg_loss": 0.0}
+
+
+        for name, metric in self.model.yolo1.metrics.items():
+            print(name,metric)
+            if name in loss_dict:
+                loss_dict[name] += metric.float()
+            tensorboard_log[f"{name}_1"] = metric
+
+        for name, metric in self.model.yolo2.metrics.items():
+            if name in loss_dict:
+                loss_dict[name] += metric.float()
+            tensorboard_log[f"{name}_2"] = metric
+
+        for name, metric in self.model.yolo3.metrics.items():
+            if name in loss_dict:
+                loss_dict[name] += metric.float()
+            tensorboard_log[f"{name}_3"] = metric
+
+
+        tensorboard_log["total_loss"] = total_loss
+        self.logger.list_of_scalars_summary(tensorboard_log, global_step)
+
+        return loss_dict
+
+    '''def log(self, total_loss, epoch, global_step, total_step, start_time):
         log = "\n---- [Epoch %d/%d] ----\n" % (epoch + 1, self.args.epochs)
 
-        # TODO: 以這個為格式，希望可以把每個epoch的資訊都顯示在這些title下面，然後一直到下一個epoch才換行，這邊其實也想參考yolov7的寫法，可以的話你可以先跑一次yolov7的看看，或是我跑然後螢幕錄影給你看。我已經有從153行開始改了，你可以從那邊繼續。
         logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
 
         tensorboard_log = {}
@@ -118,8 +149,7 @@ class Train:
 
         log += AsciiTable(loss_table).table
         log += "\nTotal Loss: %f, Runtime: %f\n" % (total_loss, time.time() - start_time)
-        #print(log)
-
+        #print(log)'''
     def train(self):
         init()
         self.check_model_path()
@@ -145,12 +175,14 @@ class Train:
                                                 warmup_steps=round(scheduler_iters * 0.1),
                                                 cycle_mult=1,
                                                 gamma=1)
+        logger.info(f'Image sizes {self.args.img_size}\n'
+                f'Starting training for {self.args.epochs} epochs...')
 
         start_time = time.time()
         self.model.train()
         for epoch in range(self.args.epochs):
-            
-            pbar = tqdm.tqdm(enumerate(train_dataloader))
+            logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
+            pbar = tqdm.tqdm(enumerate(train_dataloader),total=len(train_dataloader))
             for batch, (_, imgs, targets) in pbar:
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
@@ -166,8 +198,15 @@ class Train:
                     optimizer.zero_grad()
                     scheduler.step()
 
-                self.log(total_loss, epoch, global_step, total_step, start_time)
-                pbar.set_description(batch)
+                loss_dict = self.logging_processes(total_loss, epoch, global_step, total_step, start_time)
+                print(loss_dict)
+                s = ('%10s' * 2 + '%10.4g' * 5) % (
+                    '%g/%g' % (epoch, self.args.epochs),  loss_dict["reg_loss"],
+                    loss_dict["conf_loss"],loss_dict["cls_loss"], total_loss, imgs.shape[-1])
+                #pbar.set_description(batch)
+                print(s)
+                pbar.set_description(s)
+                pbar.refresh()
         
             self.save_model()
             print("Model is saved!")
