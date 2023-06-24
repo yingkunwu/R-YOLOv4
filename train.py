@@ -83,10 +83,8 @@ class Train:
     
 
     def logging_processes(self, total_loss, epoch, global_step, total_step, start_time)->dict:
-        #log = "\n---- [Epoch %d/%d] ----\n" % (epoch + 1, self.args.epochs)
         tensorboard_log = {}
-        #loss_table_name = ["Step: %d/%d" % (global_step, total_step),
-        #                   "loss", "reg_loss", "conf_loss", "cls_loss"]
+
 
         loss_dict = {"cls_loss" : 0.0, "conf_loss": 0.0, "reg_loss": 0.0}
 
@@ -112,7 +110,8 @@ class Train:
 
         return loss_dict
 
-    '''def log(self, total_loss, epoch, global_step, total_step, start_time):
+    '''
+    def log(self, total_loss, epoch, global_step, total_step, start_time):
         log = "\n---- [Epoch %d/%d] ----\n" % (epoch + 1, self.args.epochs)
 
         logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
@@ -148,7 +147,8 @@ class Train:
 
         log += AsciiTable(loss_table).table
         log += "\nTotal Loss: %f, Runtime: %f\n" % (total_loss, time.time() - start_time)
-        #print(log)'''
+        #print(log)
+    '''
     def train(self):
         init()
         self.check_model_path()
@@ -165,7 +165,7 @@ class Train:
         train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size,
                                                     self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
-        #print(num_iters_per_epoch)
+
         scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
 
