@@ -6,6 +6,8 @@ import os
 import shutil
 import json
 import logging
+from colorlog import ColoredFormatter
+
 import tqdm
 
 from model.yolo import Yolo
@@ -16,9 +18,31 @@ from lib.options import TrainOptions
 from lib.utils import load_class_names
 from test import test
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(format="%(message)s", level=logging.INFO)
 
+def setup_logger(log_file_path: str = None):
+    """Return a logger with a default ColoredFormatter."""
+    formatter = ColoredFormatter(
+        "%(asctime)s %(log_color)s%(levelname)-8s %(filename)s[line:%(lineno)d]: %(message)s",
+        datefmt='%Y-%m-%d %H:%M:%S',
+        reset=True,
+        log_colors={
+            'DEBUG': 'blue',
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
+            'CRITICAL': 'red',
+        })
+
+    logger = logging.getLogger(__name__)
+    shandler = logging.StreamHandler()
+    shandler.setFormatter(formatter)
+    shandler.setLevel(level=logging.INFO)
+
+    logger.addHandler(shandler)
+    logger.setLevel(level=logging.INFO)
+    return logger
+
+logger = setup_logger()
 
 def weights_init_normal(m):
     if isinstance(m, torch.nn.Conv2d):
@@ -61,7 +85,7 @@ class Train:
                 elif inp.lower()[0] == "n":
                     print(">> Stop training!")
                     exit(0)
-                
+                    
         os.makedirs(self.model_path)
         os.makedirs(os.path.join(self.model_path, "logs"))
 
@@ -91,45 +115,34 @@ class Train:
         to_save = self.args.__dict__.copy()
         with open(os.path.join(self.model_path, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
-
-    def log(self, total_loss, epoch, global_step, total_step, start_time):
-        log = "\n---- [Epoch %d/%d] ----\n" % (epoch + 1, self.args.epochs)
-
-        # TODO: 以這個為格式，希望可以把每個epoch的資訊都顯示在這些title下面，然後一直到下一個epoch才換行，這邊其實也想參考yolov7的寫法，可以的話你可以先跑一次yolov7的看看，或是我跑然後螢幕錄影給你看。我已經有從153行開始改了，你可以從那邊繼續。
-        #logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
-
+    
+    def logging_processes(self, total_loss, epoch, global_step, total_step, start_time)->dict:
         tensorboard_log = {}
-        loss_table_name = ["Step: %d/%d" % (global_step, total_step),
-                           "loss", "reg_loss", "conf_loss", "cls_loss"]
-        #loss_table = [loss_table_name]
 
-        temp = ["YoloLayer1"]
+
+        loss_dict = {"cls_loss" : 0.0, "conf_loss": 0.0, "reg_loss": 0.0}
+
+
         for name, metric in self.model.yolo1.metrics.items():
-            if name in loss_table_name:
-                temp.append(metric)
+            if name in loss_dict:
+                loss_dict[name] += metric
             tensorboard_log[f"{name}_1"] = metric
-        #loss_table.append(temp)
 
-        temp = ["YoloLayer2"]
         for name, metric in self.model.yolo2.metrics.items():
-            if name in loss_table_name:
-                temp.append(metric)
+            if name in loss_dict:
+                loss_dict[name] += metric
             tensorboard_log[f"{name}_2"] = metric
-        #loss_table.append(temp)
 
-        temp = ["YoloLayer3"]
         for name, metric in self.model.yolo3.metrics.items():
-            if name in loss_table_name:
-                temp.append(metric)
+            if name in loss_dict:
+                loss_dict[name] += metric
             tensorboard_log[f"{name}_3"] = metric
-        #loss_table.append(temp)
+
 
         tensorboard_log["total_loss"] = total_loss
         self.logger.list_of_scalars_summary(tensorboard_log, global_step)
 
-        #log += AsciiTable(loss_table).table
-        log += "\nTotal Loss: %f, Runtime: %f\n" % (total_loss, time.time() - start_time)
-        #print(log)
+        return loss_dict
 
     def train(self):
         init()
@@ -145,6 +158,7 @@ class Train:
         train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size,
                                                     self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
+
         scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
 
@@ -156,6 +170,8 @@ class Train:
                                                 warmup_steps=round(scheduler_iters * 0.1),
                                                 cycle_mult=1,
                                                 gamma=1)
+        logger.info(f'Image sizes {self.args.img_size}')
+        logger.info(f'Starting training for {self.args.epochs} epochs...')
 
         start_time = time.time()
         best_fitness = 0
@@ -165,8 +181,12 @@ class Train:
             # ------ Train ------
             # -------------------
             self.model.train()
-            #pbar = tqdm.tqdm(enumerate(train_dataloader))
-            for batch, (_, imgs, targets) in enumerate(tqdm.tqdm(train_dataloader)):
+      
+            logger.critical(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
+            pbar = enumerate(train_dataloader)
+            pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
+            #pbar = enumerate(tqdm.tqdm(train_dataloader))
+            for batch, (_, imgs, targets) in pbar:
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
                 targets = targets.to(self.device)
@@ -180,9 +200,15 @@ class Train:
                     optimizer.step()
                     optimizer.zero_grad()
                     scheduler.step()
+                    
+                loss_dict = self.logging_processes(total_loss, epoch, global_step, total_step, start_time)
+                
+                s = ('%10s'  + '%10.4g' * 5) % (
+                    '%g/%g' % (epoch, self.args.epochs),  loss_dict["reg_loss"],
+                    loss_dict["conf_loss"],loss_dict["cls_loss"], total_loss, imgs.shape[-1])
 
-                #self.log(total_loss, epoch, global_step, total_step, start_time)
-            self.save_model("last")
+                pbar.set_description(s)
+                pbar.update(0)
 
             # -------------------
             # ------ Valid ------
@@ -194,11 +220,12 @@ class Train:
             if fit > best_fitness:
                 best_fitness = fit
                 self.save_model("best")
-                print("Current best model is saved!")
+                logger.info("Current best model is saved!")
+            self.save_model("last")
 
+        logger.info("Done!")
 
-        print("Done!")
-
+        
 if __name__ == "__main__":
     parser = TrainOptions()
     args = parser.parse()
