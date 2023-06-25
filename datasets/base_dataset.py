@@ -37,7 +37,7 @@ def resize(image, size):
 
 
 class ImageDataset(Dataset):
-    # TODO: apply ImageDataset to new functions
+    # TODO: apply ImageDataset to detect.py (inference)
     # Reference: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/utils/datasets.py
 
     def __init__(self, folder_path, img_size=416, ext="png"):

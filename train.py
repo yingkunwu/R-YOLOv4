@@ -5,44 +5,16 @@ import torch
 import os
 import shutil
 import json
-import logging
-from colorlog import ColoredFormatter
-
 import tqdm
 
 from model.yolo import Yolo
 from lib.load import load_data
 from lib.scheduler import CosineAnnealingWarmupRestarts
-from lib.logger import *
+from lib.logger import Logger, logger
 from lib.options import TrainOptions
 from lib.utils import load_class_names
 from test import test
 
-
-def setup_logger(log_file_path: str = None):
-    """Return a logger with a default ColoredFormatter."""
-    formatter = ColoredFormatter(
-        "%(asctime)s %(log_color)s%(levelname)-8s %(filename)s[line:%(lineno)d]: %(message)s",
-        datefmt='%Y-%m-%d %H:%M:%S',
-        reset=True,
-        log_colors={
-            'DEBUG': 'blue',
-            'INFO': 'green',
-            'WARNING': 'yellow',
-            'ERROR': 'red',
-            'CRITICAL': 'red',
-        })
-
-    logger = logging.getLogger(__name__)
-    shandler = logging.StreamHandler()
-    shandler.setFormatter(formatter)
-    shandler.setLevel(level=logging.INFO)
-
-    logger.addHandler(shandler)
-    logger.setLevel(level=logging.INFO)
-    return logger
-
-logger = setup_logger()
 
 def weights_init_normal(m):
     if isinstance(m, torch.nn.Conv2d):
@@ -78,12 +50,13 @@ class Train:
     def check_model_path(self):
         if os.path.exists(self.model_path):
             while True:
-                inp = input(f">> Model name exists, do you want to override the previous model? [Y:N]")
+                logger.warning("Model name exists, do you want to override the previous model?")
+                inp = input(">> [Y:N]")
                 if inp.lower()[0] == "y":
                     shutil.rmtree(self.model_path)
                     break
                 elif inp.lower()[0] == "n":
-                    print(">> Stop training!")
+                    logger.info("Stop training!")
                     exit(0)
                     
         os.makedirs(self.model_path)
@@ -116,33 +89,14 @@ class Train:
         with open(os.path.join(self.model_path, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
     
-    def logging_processes(self, total_loss, epoch, global_step, total_step, start_time)->dict:
+    def logging_processes(self, total_loss, loss_items, epoch, global_step, total_step, start_time)->dict:
         tensorboard_log = {}
 
-
-        loss_dict = {"cls_loss" : 0.0, "conf_loss": 0.0, "reg_loss": 0.0}
-
-
-        for name, metric in self.model.yolo1.metrics.items():
-            if name in loss_dict:
-                loss_dict[name] += metric
-            tensorboard_log[f"{name}_1"] = metric
-
-        for name, metric in self.model.yolo2.metrics.items():
-            if name in loss_dict:
-                loss_dict[name] += metric
-            tensorboard_log[f"{name}_2"] = metric
-
-        for name, metric in self.model.yolo3.metrics.items():
-            if name in loss_dict:
-                loss_dict[name] += metric
-            tensorboard_log[f"{name}_3"] = metric
-
+        for name, metric in loss_items.items():
+            tensorboard_log[f"{name}"] = metric
 
         tensorboard_log["total_loss"] = total_loss
         self.logger.list_of_scalars_summary(tensorboard_log, global_step)
-
-        return loss_dict
 
     def train(self):
         init()
@@ -182,7 +136,7 @@ class Train:
             # -------------------
             self.model.train()
       
-            logger.critical(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
+            logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
             pbar = enumerate(train_dataloader)
             pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
             #pbar = enumerate(tqdm.tqdm(train_dataloader))
@@ -196,16 +150,17 @@ class Train:
                 loss.backward()
                 total_loss = loss.detach().item()
 
+                # TODO: make sure weight updating process
                 if global_step % self.args.subdivisions == 0:
                     optimizer.step()
                     optimizer.zero_grad()
                     scheduler.step()
                     
-                loss_dict = self.logging_processes(total_loss, epoch, global_step, total_step, start_time)
+                self.logging_processes(total_loss, loss_items, epoch, global_step, total_step, start_time)
                 
                 s = ('%10s'  + '%10.4g' * 5) % (
-                    '%g/%g' % (epoch, self.args.epochs),  loss_dict["reg_loss"],
-                    loss_dict["conf_loss"],loss_dict["cls_loss"], total_loss, imgs.shape[-1])
+                    '%g/%g' % (epoch, self.args.epochs),  loss_items["reg_loss"],
+                    loss_items["conf_loss"], loss_items["cls_loss"], total_loss, imgs.shape[-1])
 
                 pbar.set_description(s)
                 pbar.update(0)

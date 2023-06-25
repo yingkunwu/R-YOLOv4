@@ -9,6 +9,7 @@ from lib.options import TestOptions
 from lib.post_process import post_process, skewiou_2
 from lib.load import load_data
 from lib.utils import load_class_names
+from lib.logger import logger
 from model.yolo import Yolo
 
 
@@ -168,7 +169,7 @@ def test(model, device, class_names, data_folder, dataset, img_size, batch_size,
     test_dataset, test_dataloader = load_data(data_folder, dataset, "test", img_size, batch_size=batch_size, 
                                                 shuffle=False, augment=False, mosaic=False, multiscale=False)
 
-    print("Compute mAP...")
+    logger.info("Compute mAP...")
 
     stats = []  # List of tuples (tp, conf, pcls, tcls)
     iouv = np.linspace(0.5, 0.95, 10) # iou vector for mAP@0.5:0.95
@@ -205,13 +206,13 @@ def test(model, device, class_names, data_folder, dataset, img_size, batch_size,
     nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map = calculate_eval_stats(stats, len(class_names))
 
     # Print results
-    print(('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'Precision', 'Recall', 'mAP@.5', 'mAP@.5:.95'))
+    logger.info(('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'Precision', 'Recall', 'mAP@.5', 'mAP@.5:.95'))
 
     pf = '%20s' + '%12i' * 2 + '%12.3g' * 4  # print format
-    print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
+    logger.info(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
 
     for i, c in enumerate(ap_class):
-        print(pf % (class_names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
+        logger.info(pf % (class_names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
     return mp, mr, map50, map, total_loss, total_loss_items
 
