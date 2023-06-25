@@ -59,10 +59,8 @@ def bbox_xywha_ciou(pred_boxes, target_boxes):
     center_y1 = (pred_boxes[:, 3] + pred_boxes[:, 1]) / 2
     center_x2 = (target_boxes[:, 2] + target_boxes[:, 0]) / 2
     center_y2 = (target_boxes[:, 3] + target_boxes[:, 1]) / 2
-    # pred[x1,y1,x2,y2,a]
+
     inter_max_xy = torch.min(pred_boxes[:, 2:4], target_boxes[:, 2:4])
-    #inter_max_x = torch.min(pred_boxes[:, 2], target_boxes[:, 2])
-    #inter_max_y = torch.min(pred_boxes[:, 3], target_boxes[:, 3])
     inter_min_xy = torch.max(pred_boxes[:, :2], target_boxes[:, :2])
     out_max_xy = torch.max(pred_boxes[:, 2:4], target_boxes[:, 2:4])
     out_min_xy = torch.min(pred_boxes[:, :2], target_boxes[:, :2])
