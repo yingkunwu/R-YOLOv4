@@ -2,6 +2,8 @@ import torch
 import time
 import os
 import glob
+import cv2 as cv
+import numpy as np
 
 from lib.options import DetectOptions
 from lib.plot import plot_boxes
@@ -51,6 +53,10 @@ class Detect:
         start = time.time()
         for img_path, img in dataloader:
             boxes, imgs = [], []
+            print(img.shape)
+            # cv.imshow('My Image', img.numpy())
+            # cv.waitKey(0)
+            # cv.destroyAllWindows()
 
             img = img.to(self.device)
 

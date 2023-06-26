@@ -27,6 +27,7 @@ def pad_to_square(img, new_shape, pad_value, stride=32):
 
     top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+    print(top,bottom,left,right)
 
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=pad_value)  # add border
 
@@ -57,9 +58,9 @@ class ImageDataset(Dataset):
         img = transforms.ToTensor()(img)
         # Resize
         img = F.interpolate(img.unsqueeze(0), size=self.img_size, mode="bilinear").squeeze(0)
-        #transform = transforms.ToPILImage(mode="RGB")
-        #image = transform(img)
-        #image.show()
+        transform = transforms.ToPILImage(mode="RGB")
+        image = transform(img)
+        image.show()
         return img_path, img
 
 class BaseDataset(Dataset):
