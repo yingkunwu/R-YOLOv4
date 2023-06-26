@@ -50,9 +50,11 @@ class ImageDataset(Dataset):
         img_path = self.files[index % len(self.files)]
 
         # Extract image as PyTorch tensor
-        img = transforms.ToTensor()(Image.open(img_path).convert('RGB'))
+        img = np.array(Image.open(img_path).convert('RGB'))
         # Pad to square resolution
         img, _ = pad_to_square(img, (self.img_size, self.img_size), 0)
+        # Turn into tensor
+        img = transforms.ToTensor()(img)
         # Resize
         img = F.interpolate(img.unsqueeze(0), size=self.img_size, mode="bilinear").squeeze(0)
         #transform = transforms.ToPILImage(mode="RGB")

@@ -56,7 +56,7 @@ class Detect:
 
             with torch.no_grad():
                 temp = time.time()
-                output, _ = self.model(img)  # batch=1 -> [1, n, n], batch=3 -> [3, n, n]
+                output, _ ,_ = self.model(img,target = None)  # batch=1 -> [1, n, n], batch=3 -> [3, n, n]
                 temp1 = time.time()
                 box = post_process(output, self.args.conf_thres, self.args.nms_thres)
                 temp2 = time.time()
