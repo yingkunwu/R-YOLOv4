@@ -53,7 +53,7 @@ class Detect:
         start = time.time()
         for img_path, img in dataloader:
             boxes, imgs = [], []
-            print(img.shape)
+            #print(img.shape)
             # cv.imshow('My Image', img.numpy())
             # cv.waitKey(0)
             # cv.destroyAllWindows()

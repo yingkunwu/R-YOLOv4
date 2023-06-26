@@ -16,16 +16,12 @@ def xywh2xyxy(x):
 def rescale_boxes(boxes, current_dim, original_shape):
     """ Rescales bounding boxes to the original shape """
     orig_h, orig_w = original_shape
-    print("orig shape",original_shape)
-    print("current dim",current_dim)
     # The amount of padding that was added
     pad_x = max(orig_h - orig_w, 0) * (current_dim / max(original_shape))
     pad_y = max(orig_w - orig_h, 0) * (current_dim / max(original_shape))
-    print("pad_x,pad_y",pad_x,pad_y)
     # Image height and width after padding is removed
     unpad_h = current_dim - pad_y
     unpad_w = current_dim - pad_x
-    print("unpad_x,y",unpad_w,unpad_h)
     # Rescale bounding boxes to dimension of original image
     boxes[:, :4] = xywh2xyxy(boxes[:, :4])
     x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
