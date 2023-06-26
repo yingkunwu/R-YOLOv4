@@ -1,4 +1,5 @@
 /data
 /outputs
 /weights
+/yolo
 /**/__pycache__

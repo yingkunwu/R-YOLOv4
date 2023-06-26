@@ -7,8 +7,8 @@ import warnings
 from .base_dataset import BaseDataset
 
 class CustomDataset(BaseDataset):
-    def __init__(self, data_dir, img_size=416, sample_size=600, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
-        super().__init__(img_size, sample_size, augment, mosaic, multiscale, normalized_labels)
+    def __init__(self, data_dir, img_size=416, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
+        super().__init__(img_size, augment, mosaic, multiscale, normalized_labels)
         self.img_files = sorted(glob.glob(os.path.join(data_dir, "*.jpg")))
         self.label_files = [path.replace(".jpg", ".txt") for path in self.img_files]
 

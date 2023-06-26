@@ -37,8 +37,9 @@ def bbox_xywha_ciou(pred_boxes, target_boxes):
     assert pred_boxes.size() == target_boxes.size()
 
     # xywha -> xyxya
+    # xy is center point, so to get the former x of the bbox, you need to minus the 0.5 * width or height
     pred_boxes = torch.cat(
-        [pred_boxes[..., :2] - pred_boxes[..., 2:4] / 2,
+        [pred_boxes[..., :2] - pred_boxes[..., 2:4] / 2, 
          pred_boxes[..., :2] + pred_boxes[..., 2:4] / 2,
          pred_boxes[..., 4:]], dim=-1)
     target_boxes = torch.cat(
@@ -46,8 +47,8 @@ def bbox_xywha_ciou(pred_boxes, target_boxes):
          target_boxes[..., :2] + target_boxes[..., 2:4] / 2,
          target_boxes[..., 4:]], dim=-1)
 
-    w1 = pred_boxes[:, 2] - pred_boxes[:, 0]
-    h1 = pred_boxes[:, 3] - pred_boxes[:, 1]
+    w1 = pred_boxes[:, 2] - pred_boxes[:, 0] # x2 - x1
+    h1 = pred_boxes[:, 3] - pred_boxes[:, 1] # y2 - y1
     w2 = target_boxes[:, 2] - target_boxes[:, 0]
     h2 = target_boxes[:, 3] - target_boxes[:, 1]
 
@@ -68,7 +69,7 @@ def bbox_xywha_ciou(pred_boxes, target_boxes):
     inter_area = inter[:, 0] * inter[:, 1]
     inter_diag = (center_x2 - center_x1) ** 2 + (center_y2 - center_y1) ** 2
     outer = torch.clamp((out_max_xy - out_min_xy), min=0)
-    outer_diag = (outer[:, 0] ** 2) + (outer[:, 1] ** 2)
+    outer_diag = (outer[:, 0] ** 2) + (outer[:, 1] ** 2) # c ^ 2
     union = area1 + area2 - inter_area
     u = inter_diag / (outer_diag + 1e-15)
 

@@ -38,15 +38,16 @@ class YoloLayer(nn.Module):
         # as stride = 16 -> [2.25, 4.6875, 4.75, 3.4375, 4.5, 9.125]
         # as stride = 32 -> [4.4375, 3.4375, 6.0, 7.59375, 14.34375, 12.53125]
         # ---------------------------------------------------------------------
+        # masked_anchors will have 18 anchors
         self.masked_anchors = [(a_w / self.stride, a_h / self.stride, a) for a_w, a_h in self.anchors for a in self.angles]
         self.reduction = "mean"
 
         self.lambda_coord = 1.0
         self.lambda_conf_scale = 10.0
         self.lambda_cls_scale = 1.0
-        self.metrics = {}
 
     def build_targets(self, pred_boxes, pred_cls, target, masked_anchors):
+        # num of (batches, anchors(3*6), downsample grid sizes, _ , classes)
         nB, nA, nG, _, nC = pred_cls.size()
         device = pred_boxes.device
 
@@ -61,7 +62,10 @@ class YoloLayer(nn.Module):
         tcls = torch.zeros((nB, nA, nG, nG, nC), device=device)
 
         # Convert ground truth position to position that relative to the size of box (grid size)
-        target_boxes = torch.cat((target[:, 2:6] * nG, target[:, 6:]), dim=-1)
+
+        # target_boxes(x,y,w,h,a,...(classes))
+        target_boxes = torch.cat((target[:, 2:6] * nG, target[:, 6:]), dim=-1)#(originally normalize w.r.t grids)
+
         gxy = target_boxes[:, :2]
         gwh = target_boxes[:, 2:4]
         ga = target_boxes[:, 4]
@@ -77,10 +81,10 @@ class YoloLayer(nn.Module):
                 offset.append(torch.abs(torch.sub(anchor[2], ga)))
             arious = torch.stack(arious)
             offset = torch.stack(offset)
-
         best_ious, best_n = arious.max(0)
 
         # Separate target values
+        # b indicates which batch, target_labels is the class label (0 or 1)
         b, target_labels = target[:, :2].long().t()
         gi, gj = gxy.long().t()
 
@@ -89,9 +93,11 @@ class YoloLayer(nn.Module):
         gj = torch.clamp(gj, 0, nG - 1)
 
         # Set masks to specify object's location
+        # for img the row is y and col is x
         obj_mask[b, best_n, gj, gi] = 1
         noobj_mask[b, best_n, gj, gi] = 0
 
+        # TODO :: verify that the code here is correct
         # Set noobj mask to zero where iou exceeds ignore threshold
         for i, (anchor_ious, angle_offset) in enumerate(zip(arious.t(), offset.t())):
             noobj_mask[b[i], (anchor_ious > self.ignore_thresh), gj[i], gi[i]] = 0
@@ -136,12 +142,13 @@ class YoloLayer(nn.Module):
         device = output.device
         batch_size, grid_size = output.size(0), output.size(2)
 
-        # prediction.shape-> torch.Size([1, num_anchors, grid_size, grid_size, num_classes + 6])
+        # prediction.shape-> torch.Size([batch_size, num_anchors, grid_size, grid_size, num_classes + 6])
         prediction = (
             output.view(batch_size, self.num_anchors, self.num_classes + 6, grid_size, grid_size)
                 .permute(0, 1, 3, 4, 2).contiguous()
         )
 
+        # Eliminate grid sensitivity: pred_xy = scale_x_y * (pred_xy - 0.5) + 0.5 (shifting center and scaling)
         pred_x = torch.sigmoid(prediction[..., 0]) * self.scale_x_y - (self.scale_x_y - 1) / 2
         pred_y = torch.sigmoid(prediction[..., 1]) * self.scale_x_y - (self.scale_x_y - 1) / 2
         pred_w = prediction[..., 2]
@@ -152,16 +159,19 @@ class YoloLayer(nn.Module):
 
         # grid.shape-> [1, 1, 52, 52, 1]
         # 預測出來的(pred_x, pred_y)是相對於每個cell左上角的點，因此這邊需要由左上角往右下角配合grid_size加上對應的offset，畫出的圖才會在正確的位置上
+        # grid_xy is in size of downsample grid, this is to do sth like meshgrid to access the grid coord
         grid_x = torch.arange(grid_size, device=device).repeat(grid_size, 1).view([1, 1, grid_size, grid_size])
         grid_y = torch.arange(grid_size, device=device).repeat(grid_size, 1).t().view([1, 1, grid_size, grid_size])
 
-        # anchor.shape-> [1, 3, 1, 1, 1]
+        # anchor.shape-> [1, 18, 1, 1, 1]
         masked_anchors = torch.tensor(self.masked_anchors, device=device)
         anchor_w = masked_anchors[:, 0].view([1, self.num_anchors, 1, 1])
         anchor_h = masked_anchors[:, 1].view([1, self.num_anchors, 1, 1])
         anchor_a = masked_anchors[:, 2].view([1, self.num_anchors, 1, 1])
 
         # decode
+        # pred_xy is predict within the cell, so we have to add the grid coord back
+        # this is in scale of downsample img
         pred_boxes = torch.empty((prediction[..., :5].shape), device=device)
         pred_boxes[..., 0] = (pred_x + grid_x)
         pred_boxes[..., 1] = (pred_y + grid_y)
@@ -211,29 +221,25 @@ class YoloLayer(nn.Module):
             reg_loss = self.lambda_coord * reg_loss
             conf_loss = self.lambda_conf_scale * conf_loss
             cls_loss = self.lambda_cls_scale * cls_loss
-            total_loss = reg_loss + conf_loss + cls_loss
+            loss = reg_loss + conf_loss + cls_loss
 
             # --------------------
             # -   Logging Info   -
             # --------------------
-            cls_acc = 100 * class_mask[obj_mask].mean()
-            conf50 = (pred_conf > 0.5).float()
-            iou50 = (iou_scores > 0.5).float()
-            iou75 = (iou_scores > 0.75).float()
-            detected_mask = conf50 * class_mask * tconf
-            precision = torch.sum(iou50 * detected_mask) / (conf50.sum() + 1e-16)
-            recall50 = torch.sum(iou50 * detected_mask) / (obj_mask.sum() + 1e-16)
-            recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
+            #cls_acc = 100 * class_mask[obj_mask].mean()
+            #conf50 = (pred_conf > 0.5).float()
+            #iou50 = (iou_scores > 0.5).float()
+            #iou75 = (iou_scores > 0.75).float()
+            #detected_mask = conf50 * class_mask * tconf
+            #precision = torch.sum(iou50 * detected_mask) / (conf50.sum() + 1e-16)
+            #recall50 = torch.sum(iou50 * detected_mask) / (obj_mask.sum() + 1e-16)
+            #recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
 
-            self.metrics = {
-                "loss": to_cpu(total_loss).item(),
+            loss_items = {
+                "loss": to_cpu(loss).item(),
                 "reg_loss": to_cpu(reg_loss).item(),
                 "conf_loss": to_cpu(conf_loss).item(),
                 "cls_loss": to_cpu(cls_loss).item(),
-                "cls_acc": to_cpu(cls_acc).item(),
-                "recall50": to_cpu(recall50).item(),
-                "recall75": to_cpu(recall75).item(),
-                "precision": to_cpu(precision).item(),
             }
 
-            return output, total_loss
+            return output, loss, loss_items

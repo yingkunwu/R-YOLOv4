@@ -9,6 +9,7 @@ from lib.options import TestOptions
 from lib.post_process import post_process, skewiou_2
 from lib.load import load_data
 from lib.utils import load_class_names
+from lib.logger import logger
 from model.yolo import Yolo
 
 
@@ -108,7 +109,7 @@ def get_batch_statistics(outputs, targets, iouv, niou):
 
         if len(pred) == 0:
             if nl:
-                batch_stats.append((np.zeros((0, niou), dtype=bool), np.array(), np.array(), tcls))
+                batch_stats.append((np.zeros((0, niou), dtype=bool), np.empty(0), np.empty(0), tcls))
             continue
 
         pred_boxes = pred[:, :5]
@@ -146,6 +147,76 @@ def get_batch_statistics(outputs, targets, iouv, niou):
     return batch_stats
 
 
+def calculate_eval_stats(stats, num_classes):
+        p, r, f1, mp, mr, map50, map = 0., 0., 0., 0., 0., 0., 0.
+        ap50, ap, ap_class = [], [], []
+
+        if len(stats) and stats[0].any():
+            p, r, ap, f1, ap_class = ap_per_class(*stats)
+            ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
+            mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+            nt = np.bincount(stats[3].astype(np.int64), minlength=num_classes)  # number of targets per class
+        else:
+            nt = torch.zeros(1)
+
+        return nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map
+
+
+def test(model, device, class_names, data_folder, dataset, img_size, batch_size, conf_thres, nms_thres):
+    model.eval()
+
+    # Get dataloader
+    test_dataset, test_dataloader = load_data(data_folder, dataset, "test", img_size, batch_size=batch_size, 
+                                                shuffle=False, augment=False, mosaic=False, multiscale=False)
+
+    logger.info("Compute mAP...")
+
+    stats = []  # List of tuples (tp, conf, pcls, tcls)
+    iouv = np.linspace(0.5, 0.95, 10) # iou vector for mAP@0.5:0.95
+    niou = np.size(iouv)
+    seen = 0
+    total_loss = 0
+    total_loss_items = {}
+
+    for i, (_, imgs, targets) in enumerate(tqdm.tqdm(test_dataloader)):
+        imgs = imgs.to(device)
+        targets = targets.to(device)
+        seen += 1
+
+        with torch.no_grad():
+            outputs, loss, loss_items = model(imgs, targets)
+            outputs = post_process(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+
+            total_loss += loss.detach().item()
+
+            for item in loss_items:
+                if item in total_loss_items:
+                    total_loss_items[item] += loss_items[item]
+                else:
+                    total_loss_items[item] = loss_items[item]
+
+        # Rescale target
+        targets[:, 2:6] *= img_size
+        # get sample statistics
+        stats += get_batch_statistics(outputs, targets.detach().cpu(), iouv, niou)
+
+    # Concatenate sample statistics
+    stats = [np.concatenate(x, 0) for x in list(zip(*stats))]
+    # Calculate mAP
+    nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map = calculate_eval_stats(stats, len(class_names))
+
+    # Print results
+    logger.info(('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'Precision', 'Recall', 'mAP@.5', 'mAP@.5:.95'))
+
+    pf = '%20s' + '%12i' * 2 + '%12.3g' * 4  # print format
+    logger.info(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
+
+    for i, c in enumerate(ap_class):
+        logger.info(pf % (class_names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
+
+    return mp, mr, map50, map, total_loss, total_loss_items
+
+
 class Test:
     def __init__(self, args):
         self.args = args
@@ -170,59 +241,12 @@ class Test:
         self.model = self.model.to(self.device)
         self.model.load_state_dict(pretrained_dict)
 
-    def calculate_eval_stats(self, stats, seen):
-        p, r, f1, mp, mr, map50, map = 0., 0., 0., 0., 0., 0., 0.
-        ap50, ap, ap_class = [], [], []
-
-        if len(stats) and stats[0].any():
-            p, r, ap, f1, ap_class = ap_per_class(*stats)
-            ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
-            mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-            nt = np.bincount(stats[3].astype(np.int64), minlength=len(self.class_names))  # number of targets per class
-        else:
-            nt = torch.zeros(1)
-
-        # Print results
-        print(('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'Precision', 'Recall', 'mAP@.5', 'mAP@.5:.95'))
-
-        pf = '%20s' + '%12i' * 2 + '%12.3g' * 4  # print format
-        print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
-
-        for i, c in enumerate(ap_class):
-            print(pf % (self.class_names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
-
-    def test(self):
+    def run(self):
         self.load_model()
-        self.model.eval()
 
-        # Get dataloader
-        test_dataset, test_dataloader = load_data(self.args.data_folder, self.args.dataset, "test", self.args.img_size,
-                                                    batch_size=self.args.batch_size, shuffle=False, augment=False, mosaic=False, multiscale=False)
+        test(self.model, self.device, self.class_names, self.args.data_folder, self.args.dataset, 
+                self.args.img_size, self.args.batch_size, self.args.conf_thres, self.args.nms_thres)
 
-        print("Compute mAP...")
-
-        stats = []  # List of tuples (tp, conf, pcls, tcls)
-        iouv = np.linspace(0.5, 0.95, 10) # iou vector for mAP@0.5:0.95
-        niou = np.size(iouv)
-        seen = 0
-
-        for i, (_, imgs, targets) in enumerate(tqdm.tqdm(test_dataloader)):
-            imgs = imgs.to(self.device)
-            seen += 1
-
-            with torch.no_grad():
-                outputs, _ = self.model(imgs)
-                outputs = post_process(outputs, conf_thres=self.args.conf_thres, nms_thres=self.args.nms_thres)
-
-            # Rescale target
-            targets[:, 2:6] *= self.args.img_size
-            # get sample statistics
-            stats += get_batch_statistics(outputs, targets, iouv, niou)
-
-        # Concatenate sample statistics
-        stats = [np.concatenate(x, 0) for x in list(zip(*stats))]
-        # Calculate mAP
-        self.calculate_eval_stats(stats, seen)
 
 
 if __name__ == "__main__":
@@ -231,4 +255,4 @@ if __name__ == "__main__":
     print(args)
 
     t = Test(args)
-    t.test()
+    t.run()

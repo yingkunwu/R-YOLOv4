@@ -5,13 +5,15 @@ import torch
 import os
 import shutil
 import json
-from terminaltables import AsciiTable
+import tqdm
 
 from model.yolo import Yolo
 from lib.load import load_data
 from lib.scheduler import CosineAnnealingWarmupRestarts
-from lib.logger import *
+from lib.logger import Logger, logger
 from lib.options import TrainOptions
+from lib.utils import load_class_names
+from test import test
 
 
 def weights_init_normal(m):
@@ -30,22 +32,33 @@ def init():
     torch.backends.cudnn.benchmark = False
 
 
+def fitness(x):
+    # Model fitness as a weighted combination of metrics
+    w = [0.0, 0.0, 0.1, 0.9]  # weights for [P, R, mAP@0.5, mAP@0.5:0.95]
+    return (x * w).sum(0)
+
+
 class Train:
     def __init__(self, args):
         self.args = args
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model_path = os.path.join("weights", self.args.model_name)
+        self.class_names = load_class_names(os.path.join(self.args.data_folder, "class.names"))
         self.model = None
         self.logger = None
 
     def check_model_path(self):
         if os.path.exists(self.model_path):
-            inp = input(f">> Model name exists, do you want to override model name ? [y:N]")
-            if inp.lower()[0] == "y":
-                shutil.rmtree(self.model_path)
-            else:
-                print(">> Stop training!")
-                exit(1)
+            while True:
+                logger.warning("Model name exists, do you want to override the previous model?")
+                inp = input(">> [Y:N]")
+                if inp.lower()[0] == "y":
+                    shutil.rmtree(self.model_path)
+                    break
+                elif inp.lower()[0] == "n":
+                    logger.info("Stop training!")
+                    exit(0)
+                    
         os.makedirs(self.model_path)
         os.makedirs(os.path.join(self.model_path, "logs"))
 
@@ -65,8 +78,8 @@ class Train:
         self.model.apply(weights_init_normal)  # 權重初始化
         self.model.load_state_dict(model_dict)
 
-    def save_model(self):
-        save_folder = os.path.join(self.model_path, "ryolov4.pth")
+    def save_model(self, postfix):
+        save_folder = os.path.join(self.model_path, "ryolov4_{}.pth".format(postfix))
         torch.save(self.model.state_dict(), save_folder)
 
     def save_opts(self):
@@ -75,42 +88,15 @@ class Train:
         to_save = self.args.__dict__.copy()
         with open(os.path.join(self.model_path, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
-
-    def log(self, total_loss, epoch, global_step, total_step, start_time):
-        log = "\n---- [Epoch %d/%d] ----\n" % (epoch + 1, self.args.epochs)
-
+    
+    def logging_processes(self, total_loss, loss_items, epoch, global_step, total_step, start_time)->dict:
         tensorboard_log = {}
-        loss_table_name = ["Step: %d/%d" % (global_step, total_step),
-                            "loss", "reg_loss", "conf_loss", "cls_loss"]
-        loss_table = [loss_table_name]
 
-        temp = ["YoloLayer1"]
-        for name, metric in self.model.yolo1.metrics.items():
-            if name in loss_table_name:
-                temp.append(metric)
-            tensorboard_log[f"{name}_1"] = metric
-        loss_table.append(temp)
-
-        temp = ["YoloLayer2"]
-        for name, metric in self.model.yolo2.metrics.items():
-            if name in loss_table_name:
-                temp.append(metric)
-            tensorboard_log[f"{name}_2"] = metric
-        loss_table.append(temp)
-
-        temp = ["YoloLayer3"]
-        for name, metric in self.model.yolo3.metrics.items():
-            if name in loss_table_name:
-                temp.append(metric)
-            tensorboard_log[f"{name}_3"] = metric
-        loss_table.append(temp)
+        for name, metric in loss_items.items():
+            tensorboard_log[f"{name}"] = metric
 
         tensorboard_log["total_loss"] = total_loss
         self.logger.list_of_scalars_summary(tensorboard_log, global_step)
-
-        log += AsciiTable(loss_table).table
-        log += "\nTotal Loss: %f, Runtime: %f\n" % (total_loss, time.time() - start_time)
-        print(log)
 
     def train(self):
         init()
@@ -123,9 +109,13 @@ class Train:
         mosaic = False if self.args.no_mosaic else True
         multiscale = False if self.args.no_multiscale else True
 
-        train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size, self.args.sample_size,
-                                                        self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
+        if multiscale:
+            logger.warning("Multiscale augmentation is not implemented.")
+
+        train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size,
+                                                    self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
+
         scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
 
@@ -137,33 +127,63 @@ class Train:
                                                 warmup_steps=round(scheduler_iters * 0.1),
                                                 cycle_mult=1,
                                                 gamma=1)
+        logger.info(f'Image sizes {self.args.img_size}')
+        logger.info(f'Starting training for {self.args.epochs} epochs...')
 
         start_time = time.time()
-        self.model.train()
-        for epoch in range(self.args.epochs):
+        best_fitness = 0
 
-            for batch, (_, imgs, targets) in enumerate(train_dataloader):
+        for epoch in range(self.args.epochs):
+            # -------------------
+            # ------ Train ------
+            # -------------------
+            self.model.train()
+      
+            logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
+            pbar = enumerate(train_dataloader)
+            pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
+            #pbar = enumerate(tqdm.tqdm(train_dataloader))
+            for batch, (_, imgs, targets) in pbar:
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
                 targets = targets.to(self.device)
 
-                outputs, loss = self.model(imgs, targets)
+                outputs, loss, loss_items = self.model(imgs, targets)
 
                 loss.backward()
                 total_loss = loss.detach().item()
 
+                # TODO: make sure weight updating process
                 if global_step % self.args.subdivisions == 0:
                     optimizer.step()
                     optimizer.zero_grad()
                     scheduler.step()
+                    
+                self.logging_processes(total_loss, loss_items, epoch, global_step, total_step, start_time)
+                
+                s = ('%10s'  + '%10.4g' * 5) % (
+                    '%g/%g' % (epoch, self.args.epochs),  loss_items["reg_loss"],
+                    loss_items["conf_loss"], loss_items["cls_loss"], total_loss, imgs.shape[-1])
 
-                self.log(total_loss, epoch, global_step, total_step, start_time)
+                pbar.set_description(s)
+                pbar.update(0)
+
+            # -------------------
+            # ------ Valid ------
+            # -------------------
+            mp, mr, map50, map, loss, loss_items = test(self.model, self.device, self.class_names, self.args.data_folder, 
+                                self.args.dataset, self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65)
+
+            fit = fitness(np.array([mp, mr, map50, map]))
+            if fit > best_fitness:
+                best_fitness = fit
+                self.save_model("best")
+                logger.info("Current best model is saved!")
+            self.save_model("last")
+
+        logger.info("Done!")
+
         
-            self.save_model()
-            print("Model is saved!")
-
-        print("Done!")
-
 if __name__ == "__main__":
     parser = TrainOptions()
     args = parser.parse()

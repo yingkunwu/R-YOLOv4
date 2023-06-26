@@ -30,7 +30,7 @@ def hsv(img, hgain=0.015, sgain=0.7, vgain=0.4):
 
 
 def mixup(img, labels, img2, labels2):
-    r = np.random.beta(32.0, 32.0)  # mixup ratio, alpha=beta=32.0
+    r = np.random.beta(8.0, 8.0)  # mixup ratio, alpha=beta=8.0
     img = (img * r + img2 * (1 - r)).astype(np.uint8)
     labels = torch.cat((labels, labels2), 0)
     return img, labels
@@ -58,41 +58,45 @@ def get_rot_mat(theta):
                          [torch.sin(theta), torch.cos(theta), 0]])
 
 
-def rotate(images, targets):
-    degree = np.random.rand() * 90
-    radian = np.pi / 180 * degree
-    R = torch.stack([
-        torch.stack([torch.cos(torch.tensor(-radian)), -torch.sin(torch.tensor(-radian)), torch.tensor(0)]),
-        torch.stack([torch.sin(torch.tensor(-radian)), torch.cos(torch.tensor(-radian)), torch.tensor(0)]),
-        torch.stack([torch.tensor(0), torch.tensor(0), torch.tensor(1)])]).reshape(3, 3)
-    T1 = torch.stack([
-        torch.stack([torch.tensor(1), torch.tensor(0), torch.tensor(-0.5)]),
-        torch.stack([torch.tensor(0), torch.tensor(1), torch.tensor(-0.5)]),
-        torch.stack([torch.tensor(0), torch.tensor(0), torch.tensor(1)])]).reshape(3, 3)
-    T2 = torch.stack([
-        torch.stack([torch.tensor(1), torch.tensor(0), torch.tensor(0.5)]),
-        torch.stack([torch.tensor(0), torch.tensor(1), torch.tensor(0.5)]),
-        torch.stack([torch.tensor(0), torch.tensor(0), torch.tensor(1)])]).reshape(3, 3)
+def random_warping(images, targets, degrees=10, scale = .9, translate = .1, border=(0, 0)):
+    height = images.shape[0] + border[0] * 2  # shape(h, w, c)
+    width = images.shape[1] + border[1] * 2
 
-    images = images.unsqueeze(0)
-    rot_mat = get_rot_mat(radian)[None, ...].repeat(images.shape[0], 1, 1)
-    grid = F.affine_grid(rot_mat, images.size(), align_corners=True)
-    images = F.grid_sample(images, grid, align_corners=True)
-    images = images.squeeze(0)
+    # Center
+    C = np.eye(3)
+    C[0, 2] = -images.shape[1] / 2  # x translation (pixels)
+    C[1, 2] = -images.shape[0] / 2  # y translation (pixels)
 
-    points = torch.cat([targets[:, 2:4], torch.ones(len(targets), 1)], dim=1)
-    points = points.T
-    points = torch.matmul(T2, torch.matmul(R, torch.matmul(T1, points))).T
-    targets[:, 2:4] = points[:, :2]
+    # Rotation and Scaling
+    R = np.eye(3)
+    a = random.uniform(-degrees, degrees)
+    s = random.uniform(1 - scale, 1.1 + scale)
+    R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
 
-    targets = targets[targets[:, 2] < 1]
-    targets = targets[targets[:, 2] > 0]
-    targets = targets[targets[:, 3] < 1]
-    targets = targets[targets[:, 3] > 0]
-    assert (targets[:, 2:4] > 0).all() or (targets[:, 2:4] < 1).all()
+    # Translation
+    T = np.eye(3)
+    T[0, 2] = random.uniform(0.3 - translate, 0.3 + translate) * width  # x translation (pixels)
+    T[1, 2] = random.uniform(0.3 - translate, 0.3 + translate) * height  # y translation (pixels)
 
-    targets[:, 6] = targets[:, 6] - radian
+    M = T @ R @ C
+    output = cv2.warpPerspective(images, M, dsize=(width, height), borderValue=(0, 0, 0))
+
+    M = torch.tensor(M, dtype=torch.double)
+
+    xy = targets[:, 2:4] # num of target x 2
+    xy = torch.cat((xy, torch.ones(xy.size()[0]).view(xy.size()[0],1)), dim = -1).double() # num of target x 3 
+    
+    new_xy = (torch.matmul(M, xy.t())).t()[:, :2]
+
+    wh = targets[:, 4:6]
+    new_wh = wh * s
+
+    targets[:, 2:4] = new_xy
+    targets[:, 4:6] = new_wh
+
+    targets[:, 6] = targets[:, 6] - a * np.pi / 180
     targets[:, 6][targets[:, 6] <= -np.pi / 2] = targets[:, 6][targets[:, 6] <= -np.pi / 2] + np.pi
 
     assert (-np.pi / 2 < targets[:, 6]).all() or (targets[:, 6] <= np.pi / 2).all()
-    return images, targets
+
+    return output, targets
