@@ -12,28 +12,25 @@ import torchvision.transforms as transforms
 from lib.augmentations import vertical_flip, horisontal_flip, hsv, gaussian_noise, mixup, random_warping
 
 
-def pad_to_square(img, pad_value):
-    h, w, c = img.shape
-    # (upper / left) padding
-    pad = np.abs(h - w) // 2
-    # Determine padding
-    if h <= w:
-        padw = 0
-        padh = pad
-    else:
-        padw = pad
-        padh = 0
+def pad_to_square(img, new_shape, pad_value, stride=32):
+    shape = img.shape[:2]
 
-    top, bottom = int(round(padh - 0.1)), int(round(padh + 0.1))
-    left, right = int(round(padw - 0.1)), int(round(padw + 0.1))
+    # Scale ratio (new / old)
+    r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
+
+    # Compute padding
+    ratio = r, r  # width, height ratios
+    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+    dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
+    dw /= 2  # divide padding into 2 sides
+    dh /= 2
+
+    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+
     img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=pad_value)  # add border
 
-    return img, (padh, padw)
-
-
-def resize(image, size):
-    image = F.interpolate(image.unsqueeze(0), size=size, mode="nearest").squeeze(0)
-    return image
+    return img, (dh, dw)
 
 
 class ImageDataset(Dataset):
@@ -55,9 +52,9 @@ class ImageDataset(Dataset):
         # Extract image as PyTorch tensor
         img = transforms.ToTensor()(Image.open(img_path).convert('RGB'))
         # Pad to square resolution
-        img, _ = pad_to_square(img, 0)
+        img, _ = pad_to_square(img, (self.img_size, self.img_size), 0)
         # Resize
-        img = resize(img, self.img_size)
+        img = F.interpolate(img.unsqueeze(0), size=self.img_size, mode="bilinear").squeeze(0)
         #transform = transforms.ToPILImage(mode="RGB")
         #image = transform(img)
         #image.show()
@@ -84,26 +81,26 @@ class BaseDataset(Dataset):
                 img, targets = self.load_mosaic(index)
             else:
                 img, targets = self.load_mosaic9(index)
-            img, targets = random_warping(img, targets, scale = .5, translate = .1)
+            img, targets = random_warping(img, targets, scale = .5, translate = .1, border=self.mosaic_border)
 
             if np.random.random() < 0.5:
                 if random.random() < 0.8:
                     img2, targets2 = self.load_mosaic(random.randint(0, len(self.img_files) - 1))
                 else:
                     img2, targets2 = self.load_mosaic9(random.randint(0, len(self.img_files) - 1))
-                img, targets = random_warping(img, targets, scale = .5, translate = .1)
+                img2, targets2 = random_warping(img2, targets2, scale = .5, translate = .1, border=self.mosaic_border)
 
                 img, targets = mixup(img, targets, img2, targets2)
         else:
             img, (h0, w0), (h, w) = self.load_image(index)
-            img, pad = pad_to_square(img, 0)
+            img, pad = pad_to_square(img, (self.img_size, self.img_size), 0)
 
-            targets = self.load_target(index, pad, (h0, w0), (h, w), img.shape[:2])
+            targets = self.load_target(index, pad, (h0, w0), (h, w))
             
             if self.augment:
                 img, targets = random_warping(img, targets, scale = .5, translate = .1)
 
-        targets = self.filtering(targets, img.shape[:2])
+        targets = self.filtering(targets, (0, img.shape[1], 0, img.shape[0]))
         targets = self.normalize(targets, img.shape[:2])
         img = transforms.ToTensor()(img)
 
@@ -123,16 +120,8 @@ class BaseDataset(Dataset):
         # Add sample index to targets
         for i, boxes in enumerate(targets):
             boxes[:, 0] = i
-        targets = torch.cat(targets, 0)
-        # TODO: make sure we don't need this
-        # Selects new image size every tenth batch
-        #if self.multiscale and self.batch_count % 10 == 0:
-        #    self.img_size = random.choice(range(self.min_size, self.max_size + 1, 32))
-        # Resize images to input shape
-        imgs = torch.stack([resize(img, self.img_size) for img in imgs])
-        #imgs = torch.stack(imgs)
-        self.batch_count += 1
-        return paths, imgs, targets
+
+        return paths, torch.stack(imgs, 0), torch.cat(targets, 0)
 
     def __len__(self):
         return len(self.img_files)
@@ -159,7 +148,7 @@ class BaseDataset(Dataset):
 
         return img, (h, w), img.shape[:2]
 
-    def load_target(self, index, pad, img_size0, img_size, padded_size):
+    def load_target(self, index, pad, img_size0, img_size, boarder=None):
         """
         Args:
             index: index of label files going to be load
@@ -208,16 +197,16 @@ class BaseDataset(Dataset):
             w *= w_
             h *= h_
 
-            # Relocalize coordinates based on images padding
-            x += pad[1]
-            y += pad[0]
-
             # Create targets
             targets = torch.zeros((len(label), 7))
             targets[:, 1:] = torch.vstack([label, x, y, w, h, theta]).T
 
-            # Remove objects that exceed the size of images after padding
-            targets = self.filtering(targets, padded_size)
+            if boarder is not None:
+                targets = self.filtering(targets, boarder)
+
+            # Relocalize coordinates based on images padding
+            targets[:, 2] += pad[1]
+            targets[:, 3] += pad[0]
 
             return targets
 
@@ -265,7 +254,7 @@ class BaseDataset(Dataset):
 
             # Labels
             pad = (padh, padw)
-            targets = self.load_target(index, pad, (h0, w0), (h, w), padded_size)
+            targets = self.load_target(index, pad, (h0, w0), (h, w), boarder=(x1b, x2b, y1b, y2b))
             labels4.append(targets)
 
         # Concat labels
@@ -316,7 +305,7 @@ class BaseDataset(Dataset):
 
             # Labels
             pad = (pady, padx)
-            targets = self.load_target(index, pad, (h_, w_), (h, w), padded_size)
+            targets = self.load_target(index, pad, (h_, w_), (h, w), boarder=(x1 - padx, w, y1 - pady, h))
             labels9.append(targets)
 
         # Concat labels
@@ -325,22 +314,22 @@ class BaseDataset(Dataset):
         # Offset
         yc, xc = [int(random.uniform(0, s)) for _ in self.mosaic_border]  # mosaic center x, y
         img9 = img9[yc:yc + 2 * s, xc:xc + 2 * s]
+
+        # Remove objects that exceed the size of images (the cropped area) when doing mosaic augmentation
+        labels9 = self.filtering(labels9, (xc, xc + 2 * s, yc, yc + 2 * s))
         
         # Translate labels
         labels9[:, 2] -= xc
         labels9[:, 3] -= yc
 
-        # Remove objects that exceed the size of images (the cropped area) when doing mosaic augmentation
-        labels9 = self.filtering(labels9, img9.shape[:2])
-
         return img9, labels9
 
-    def filtering(self, targets, img_size):
-        # Remove objects that exceed the size of images (the cropped area) when doing mosaic augmentation
-        height, width = img_size
+    def filtering(self, targets, boarder):
+        # Remove objects that exceed the boarder
+        x1, x2, y1, y2 = boarder
         mask = (
-            (targets[:, 2] > 0) & (targets[:, 2] < width) &
-            (targets[:, 3] > 0) & (targets[:, 3] < height)
+            (targets[:, 2] > x1) & (targets[:, 2] < x2) &
+            (targets[:, 3] > y1) & (targets[:, 3] < y2)
         )
 
         return targets[mask]

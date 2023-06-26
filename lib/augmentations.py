@@ -58,22 +58,28 @@ def get_rot_mat(theta):
                          [torch.sin(theta), torch.cos(theta), 0]])
 
 
-def random_warping(images, targets, degrees=10, scale = .9, translate = .1):
-    h, w, c = images.shape[0], images.shape[1], images.shape[2]
+def random_warping(images, targets, degrees=10, scale = .9, translate = .1, border=(0, 0)):
+    height = images.shape[0] + border[0] * 2  # shape(h, w, c)
+    width = images.shape[1] + border[1] * 2
+
+    # Center
+    C = np.eye(3)
+    C[0, 2] = -images.shape[1] / 2  # x translation (pixels)
+    C[1, 2] = -images.shape[0] / 2  # y translation (pixels)
 
     # Rotation and Scaling
     R = np.eye(3)
     a = random.uniform(-degrees, degrees)
     s = random.uniform(1 - scale, 1.1 + scale)
-    R[:2] = cv2.getRotationMatrix2D(angle=a, center=(w//2, h//2), scale=s)
+    R[:2] = cv2.getRotationMatrix2D(angle=a, center=(0, 0), scale=s)
 
     # Translation
     T = np.eye(3)
-    T[0, 2] = random.uniform(0.3 - translate, 0.3 + translate) * w  # x translation (pixels)
-    T[1, 2] = random.uniform(0.3 - translate, 0.3 + translate) * h  # y translation (pixels)
+    T[0, 2] = random.uniform(0.3 - translate, 0.3 + translate) * width  # x translation (pixels)
+    T[1, 2] = random.uniform(0.3 - translate, 0.3 + translate) * height  # y translation (pixels)
 
-    M = T @ R
-    output = cv2.warpPerspective(images, M, dsize=(w, h), borderValue=(0, 0, 0))
+    M = T @ R @ C
+    output = cv2.warpPerspective(images, M, dsize=(width, height), borderValue=(0, 0, 0))
 
     M = torch.tensor(M, dtype=torch.double)
 
