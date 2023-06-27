@@ -14,6 +14,7 @@ from lib.logger import Logger, logger
 from lib.options import TrainOptions
 from lib.utils import load_class_names
 from test import test
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
 def weights_init_normal(m):
@@ -116,17 +117,18 @@ class Train:
                                                     self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
 
-        scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
+        #scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
-        scheduler = CosineAnnealingWarmupRestarts(optimizer,
-                                                first_cycle_steps=round(scheduler_iters),
-                                                max_lr=self.args.lr,
-                                                min_lr=1e-5,
-                                                warmup_steps=round(scheduler_iters * 0.1),
-                                                cycle_mult=1,
-                                                gamma=1)
+        # scheduler = CosineAnnealingWarmupRestarts(optimizer,
+        #                                         first_cycle_steps=round(scheduler_iters),
+        #                                         max_lr=self.args.lr,
+        #                                         min_lr=1e-5,
+        #                                         warmup_steps=round(scheduler_iters * 0.1),
+        #                                         cycle_mult=1,
+        #                                         gamma=1)
+        scheduler = CosineAnnealingLR(optimizer,T_max = self.args.epochs,eta_min = 1e-5)
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
 
@@ -139,7 +141,7 @@ class Train:
             # -------------------
             self.model.train()
       
-            logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
+            logger.info(('\n' + '%10s' * 7) % ('Epoch', 'last lr', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
             pbar = enumerate(train_dataloader)
             pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
             #pbar = enumerate(tqdm.tqdm(train_dataloader))
@@ -161,8 +163,8 @@ class Train:
                     
                 self.logging_processes(total_loss, loss_items, epoch, global_step, total_step, start_time)
                 
-                s = ('%10s'  + '%10.4g' * 5) % (
-                    '%g/%g' % (epoch, self.args.epochs),  loss_items["reg_loss"],
+                s = ('%10s'  + '%10.4g' * 6) % (
+                    '%g/%g' % (epoch, self.args.epochs),scheduler.get_last_lr()[0],  loss_items["reg_loss"],
                     loss_items["conf_loss"], loss_items["cls_loss"], total_loss, imgs.shape[-1])
 
                 pbar.set_description(s)
