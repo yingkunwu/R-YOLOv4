@@ -189,7 +189,7 @@ class YoloLayer(nn.Module):
         )
 
         if target is None:
-            return output, 0
+            return output, 0,{}
         else:
             iou_scores, skew_iou, ciou_loss, class_mask, obj_mask, noobj_mask, ta, tcls, tconf = self.build_targets(
                 pred_boxes=pred_boxes, pred_cls=pred_cls, target=target, masked_anchors=masked_anchors
