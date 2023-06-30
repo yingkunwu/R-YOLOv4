@@ -188,6 +188,12 @@ class YoloLayer(nn.Module):
             -1,
         )
 
+        print(torch.cat([pred_boxes[..., :4] * self.stride, pred_boxes[..., 4:]], dim=-1).view(batch_size, -1, 5).shape)
+        print(pred_conf.view(batch_size, -1, 1).shape)
+        print(pred_cls.view(batch_size, -1, self.num_classes).shape)
+        print(output.shape)
+        exit(1)
+
         if target is None:
             return output, 0
         else:
