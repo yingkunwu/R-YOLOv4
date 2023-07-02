@@ -126,7 +126,7 @@ class Train:
                                                     self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
 
-        #scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
+        scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
@@ -137,7 +137,7 @@ class Train:
         #                                         warmup_steps=round(scheduler_iters * 0.1),
         #                                         cycle_mult=1,
         #                                         gamma=1)
-        scheduler = CosineAnnealingLR(optimizer,T_max = self.args.epochs,eta_min = 1e-5)
+        scheduler = CosineAnnealingLR(optimizer,T_max = scheduler_iters, eta_min = 1e-5)
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
 
