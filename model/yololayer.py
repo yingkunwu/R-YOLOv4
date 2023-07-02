@@ -4,24 +4,6 @@ import numpy as np
 from model.loss import *
 
 
-def to_cpu(tensor):
-    return tensor.detach().cpu()
-
-
-def anchor_wh_iou(wh1, wh2):
-    """
-    :param wh1: width and height of ground truth boxes
-    :param wh2: width and height of anchor boxes
-    :return: iou
-    """
-    wh2 = wh2.t()
-    w1, h1 = wh1[0], wh1[1]
-    w2, h2 = wh2[0], wh2[1]
-    inter_area = torch.min(w1, w2) * torch.min(h1, h2)
-    union_area = (w1 * h1 + 1e-16) + w2 * h2 - inter_area
-    return inter_area / union_area
-
-
 class YoloLayer(nn.Module):
     def __init__(self, num_classes, anchors, angles, stride, scale_x_y, ignore_thresh):
         super(YoloLayer, self).__init__()
@@ -31,7 +13,6 @@ class YoloLayer(nn.Module):
         self.num_anchors = len(anchors) * len(angles)
         self.stride = stride
         self.scale_x_y = scale_x_y
-        self.ignore_thresh = ignore_thresh
         # ---------------------------------------------------------------------
         # ------------------------ masked anchors size ------------------------
         # as stride = 8 -> [1.5, 2.0, 2.375, 4.5, 5.0, 3.5]
@@ -40,100 +21,8 @@ class YoloLayer(nn.Module):
         # ---------------------------------------------------------------------
         # masked_anchors will have 18 anchors
         self.masked_anchors = [(a_w / self.stride, a_h / self.stride, a) for a_w, a_h in self.anchors for a in self.angles]
-        self.reduction = "mean"
 
-        self.lambda_coord = 1.0
-        self.lambda_conf_scale = 10.0
-        self.lambda_cls_scale = 1.0
-
-    def build_targets(self, pred_boxes, pred_cls, target, masked_anchors):
-        # num of (batches, anchors(3*6), downsample grid sizes, _ , classes)
-        nB, nA, nG, _, nC = pred_cls.size()
-        device = pred_boxes.device
-
-        # Output tensors
-        obj_mask = torch.zeros((nB, nA, nG, nG), device=device)
-        noobj_mask = torch.ones((nB, nA, nG, nG), device=device)
-        class_mask = torch.zeros((nB, nA, nG, nG), device=device)
-        iou_scores = torch.zeros((nB, nA, nG, nG), device=device)
-        skew_iou = torch.zeros((nB, nA, nG, nG), device=device)
-        ciou_loss = torch.zeros((nB, nA, nG, nG), device=device)
-        ta = torch.zeros((nB, nA, nG, nG), device=device)
-        tcls = torch.zeros((nB, nA, nG, nG, nC), device=device)
-
-        # Convert ground truth position to position that relative to the size of box (grid size)
-
-        # target_boxes(x,y,w,h,a,...(classes))
-        target_boxes = torch.cat((target[:, 2:6] * nG, target[:, 6:]), dim=-1)#(originally normalize w.r.t grids)
-
-        gxy = target_boxes[:, :2]
-        gwh = target_boxes[:, 2:4]
-        ga = target_boxes[:, 4]
-
-        # Get anchors with best iou and their angle difference with ground truths
-        arious = []
-        offset = []
-        with torch.no_grad():
-            for anchor in masked_anchors:
-                ariou = anchor_wh_iou(anchor[:2], gwh)
-                cos = torch.abs(torch.cos(torch.sub(anchor[2], ga)))
-                arious.append(ariou * cos)
-                offset.append(torch.abs(torch.sub(anchor[2], ga)))
-            arious = torch.stack(arious)
-            offset = torch.stack(offset)
-        best_ious, best_n = arious.max(0)
-
-        # Separate target values
-        # b indicates which batch, target_labels is the class label (0 or 1)
-        b, target_labels = target[:, :2].long().t()
-        gi, gj = gxy.long().t()
-
-        # Avoid the error caused by the wrong position of the center coordinate of objects
-        gi = torch.clamp(gi, 0, nG - 1)
-        gj = torch.clamp(gj, 0, nG - 1)
-
-        # Set masks to specify object's location
-        # for img the row is y and col is x
-        obj_mask[b, best_n, gj, gi] = 1
-        noobj_mask[b, best_n, gj, gi] = 0
-
-        # TODO :: verify that the code here is correct
-        # Set noobj mask to zero where iou exceeds ignore threshold
-        for i, (anchor_ious, angle_offset) in enumerate(zip(arious.t(), offset.t())):
-            noobj_mask[b[i], (anchor_ious > self.ignore_thresh), gj[i], gi[i]] = 0
-            # if iou is greater than 0.4 and the angle offset if smaller than 15 degrees then ignore training
-            noobj_mask[b[i], (anchor_ious > 0.4) & (angle_offset < (np.pi / 12)), gj[i], gi[i]] = 0
-
-        # Angle (encode)
-        ta[b, best_n, gj, gi] = ga - masked_anchors[best_n][:, 2]
-
-        # One-hot encoding of label
-        tcls[b, best_n, gj, gi, target_labels] = 1
-        tconf = obj_mask.float()
-
-        # Calculate ciou loss
-        iou, ciou = bbox_xywha_ciou(pred_boxes[b, best_n, gj, gi], target_boxes)
-        with torch.no_grad():
-            img_size = self.stride * nG
-            bbox_loss_scale = 2.0 - 1.0 * gwh[:, 0] * gwh[:, 1] / (img_size ** 2)
-        ciou = bbox_loss_scale * (1.0 - ciou)
-
-        # magnitude for reg loss
-        skew_iou[b, best_n, gj, gi] = torch.exp(1 - iou) - 1
-
-        # unit vector for reg loss
-        ciou_loss[b, best_n, gj, gi] = ciou
-
-        # Compute label correctness and iou at best anchor
-        class_mask[b, best_n, gj, gi] = (pred_cls[b, best_n, gj, gi].argmax(-1) == target_labels).float()
-        iou_scores[b, best_n, gj, gi] = iou.detach()
-
-        obj_mask = obj_mask.type(torch.bool)
-        noobj_mask = noobj_mask.type(torch.bool)
-
-        return iou_scores, skew_iou, ciou_loss, class_mask, obj_mask, noobj_mask, ta, tcls, tconf
-
-    def forward(self, output, target=None):
+    def forward(self, output):
         # anchors = [12, 16, 19, 36, 40, 28, 36, 75, 76, 55, 72, 146, 142, 110, 192, 243, 459, 401]
         # anchor_masks = [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
         # strides = [8, 16, 32]
@@ -188,58 +77,4 @@ class YoloLayer(nn.Module):
             -1,
         )
 
-        if True:
-            return output, masked_anchors
-        else:
-            iou_scores, skew_iou, ciou_loss, class_mask, obj_mask, noobj_mask, ta, tcls, tconf = self.build_targets(
-                pred_boxes=pred_boxes, pred_cls=pred_cls, target=target, masked_anchors=masked_anchors
-            )
-            # --------------------
-            # - Calculating Loss -
-            # --------------------
-            reg_loss, conf_loss, cls_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
-            FOCAL = FocalLoss(reduction=self.reduction)
-
-            if len(target) > 0:
-                # Reg Loss for bounding box prediction
-                iou_const = skew_iou[obj_mask]
-                angle_loss = F.smooth_l1_loss(pred_a[obj_mask], ta[obj_mask], reduction="none")
-                reg_vector = angle_loss + ciou_loss[obj_mask]
-                with torch.no_grad():
-                    reg_magnitude = iou_const / reg_vector
-                reg_loss += (reg_magnitude * reg_vector).mean()
-
-                # Focal Loss for object's prediction
-                conf_loss += FOCAL(pred_conf[obj_mask], tconf[obj_mask])
-
-                # Binary Cross Entropy Loss for class' prediction
-                cls_loss += F.binary_cross_entropy(pred_cls[obj_mask], tcls[obj_mask], reduction=self.reduction)
-
-            conf_loss += FOCAL(pred_conf[noobj_mask], tconf[noobj_mask])
-
-            # Loss scaling
-            reg_loss = self.lambda_coord * reg_loss
-            conf_loss = self.lambda_conf_scale * conf_loss
-            cls_loss = self.lambda_cls_scale * cls_loss
-            loss = reg_loss + conf_loss + cls_loss
-
-            # --------------------
-            # -   Logging Info   -
-            # --------------------
-            #cls_acc = 100 * class_mask[obj_mask].mean()
-            #conf50 = (pred_conf > 0.5).float()
-            #iou50 = (iou_scores > 0.5).float()
-            #iou75 = (iou_scores > 0.75).float()
-            #detected_mask = conf50 * class_mask * tconf
-            #precision = torch.sum(iou50 * detected_mask) / (conf50.sum() + 1e-16)
-            #recall50 = torch.sum(iou50 * detected_mask) / (obj_mask.sum() + 1e-16)
-            #recall75 = torch.sum(iou75 * detected_mask) / (obj_mask.sum() + 1e-16)
-
-            loss_items = {
-                "loss": to_cpu(loss).item(),
-                "reg_loss": to_cpu(reg_loss).item(),
-                "conf_loss": to_cpu(conf_loss).item(),
-                "cls_loss": to_cpu(cls_loss).item(),
-            }
-
-            return output, loss, loss_items
+        return output, masked_anchors

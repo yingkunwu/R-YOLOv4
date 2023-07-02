@@ -13,6 +13,7 @@ from lib.scheduler import CosineAnnealingWarmupRestarts
 from lib.logger import Logger, logger
 from lib.options import TrainOptions
 from lib.utils import load_class_names
+from lib.loss import ComputeLoss
 from test import test
 
 
@@ -127,6 +128,9 @@ class Train:
                                                 warmup_steps=round(scheduler_iters * 0.1),
                                                 cycle_mult=1,
                                                 gamma=1)
+        
+        compute_loss = ComputeLoss()
+
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
 
@@ -148,7 +152,9 @@ class Train:
                 imgs = imgs.to(self.device)
                 targets = targets.to(self.device)
 
-                outputs, loss, loss_items = self.model(imgs, targets)
+                #outputs, loss, loss_items = self.model(imgs, targets)
+                output, masked_anchors = self.model(imgs)
+                loss, loss_items = compute_loss(output, targets, masked_anchors)
 
                 loss.backward()
                 total_loss = loss.detach().item()
