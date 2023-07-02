@@ -162,7 +162,7 @@ def calculate_eval_stats(stats, num_classes):
         return nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map
 
 
-def test(model, device, class_names, data_folder, dataset, img_size, batch_size, conf_thres, nms_thres):
+def test(model, device, class_names, data_folder, dataset, img_size, batch_size, conf_thres, nms_thres, epoch, val_mode = False):
     model.eval()
 
     # Get dataloader
@@ -177,12 +177,13 @@ def test(model, device, class_names, data_folder, dataset, img_size, batch_size,
     seen = 0
     total_loss = 0
     total_loss_items = {}
+    num_iters_per_epoch = len(test_dataloader)
 
     for i, (_, imgs, targets) in enumerate(tqdm.tqdm(test_dataloader)):
         imgs = imgs.to(device)
         targets = targets.to(device)
         seen += 1
-
+        test_global_step = num_iters_per_epoch * epoch + i + 1
         with torch.no_grad():
             outputs, loss, loss_items = model(imgs, targets)
             outputs = post_process(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
@@ -194,6 +195,7 @@ def test(model, device, class_names, data_folder, dataset, img_size, batch_size,
                     total_loss_items[item] += loss_items[item]
                 else:
                     total_loss_items[item] = loss_items[item]
+        
 
         # Rescale target
         targets[:, 2:6] *= img_size

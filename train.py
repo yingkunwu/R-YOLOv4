@@ -90,13 +90,12 @@ class Train:
         with open(os.path.join(self.model_path, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
     
-    def logging_processes(self, total_loss, loss_items, epoch, global_step, total_step, start_time)->dict:
+    def logging_processes(self, loss_items, global_step)->dict:
         tensorboard_log = {}
 
         for name, metric in loss_items.items():
-            tensorboard_log[f"{name}"] = metric
+            tensorboard_log[f"train/{name}"] = metric
 
-        tensorboard_log["total_loss"] = total_loss
         self.logger.list_of_scalars_summary(tensorboard_log, global_step)
 
     def train(self):
@@ -174,7 +173,8 @@ class Train:
             # ------ Valid ------
             # -------------------
             mp, mr, map50, map, loss, loss_items = test(self.model, self.device, self.class_names, self.args.data_folder, 
-                                self.args.dataset, self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65)
+                                self.args.dataset, self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65,epoch = epoch, val_mode = True)
+            
 
             fit = fitness(np.array([mp, mr, map50, map]))
             if fit > best_fitness:
