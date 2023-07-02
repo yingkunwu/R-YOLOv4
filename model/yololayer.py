@@ -181,21 +181,15 @@ class YoloLayer(nn.Module):
 
         output = torch.cat(
             (
-                torch.cat([pred_boxes[..., :4] * self.stride, pred_boxes[..., 4:]], dim=-1).view(batch_size, -1, 5),
-                pred_conf.view(batch_size, -1, 1),
-                pred_cls.view(batch_size, -1, self.num_classes),
+                torch.cat([pred_boxes[..., :4], pred_boxes[..., 4:]], dim=-1),
+                pred_conf.unsqueeze(-1),
+                pred_cls
             ),
             -1,
         )
 
-        print(torch.cat([pred_boxes[..., :4] * self.stride, pred_boxes[..., 4:]], dim=-1).view(batch_size, -1, 5).shape)
-        print(pred_conf.view(batch_size, -1, 1).shape)
-        print(pred_cls.view(batch_size, -1, self.num_classes).shape)
-        print(output.shape)
-        exit(1)
-
-        if target is None:
-            return output, 0
+        if True:
+            return output, masked_anchors
         else:
             iou_scores, skew_iou, ciou_loss, class_mask, obj_mask, noobj_mask, ta, tcls, tconf = self.build_targets(
                 pred_boxes=pred_boxes, pred_cls=pred_cls, target=target, masked_anchors=masked_anchors

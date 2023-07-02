@@ -9,6 +9,7 @@ class Upsample(nn.Module):
         assert (x.data.dim() == 4)
         _, _, tw, th = target_size
 
+        # TODO: verify this operation
         if inference:
             B, C, W, H = x.size()
             return x.view(B, C, W, 1, H, 1).expand(B, C, W, tw // W, H, th // H).contiguous().view(B, C, tw, th)

@@ -32,7 +32,8 @@ class Yolo(nn.Module):
         d3, d4, d5 = self.backbone(i)
         x20, x13, x6 = self.neck(d5, d4, d3, inference)
         x2, x10, x18 = self.head(x20, x13, x6)
-        out1, loss1, loss_items1 = self.yolo1(x2, target)
+
+        """out1, loss1, loss_items1 = self.yolo1(x2, target)
         out2, loss2, loss_items2 = self.yolo2(x10, target)
         out3, loss3, loss_items3 = self.yolo3(x18, target)
 
@@ -43,4 +44,10 @@ class Yolo(nn.Module):
         for item in loss_items1.keys():
             loss_items[item] = loss_items1[item] + loss_items2[item] + loss_items3[item]
 
-        return out, loss, loss_items
+        return out, loss, loss_items"""
+
+        out1, mask1 = self.yolo1(x2, target)
+        out2, mask2 = self.yolo2(x10, target)
+        out3, mask3 = self.yolo3(x18, target)
+
+        return [out1, out2, out3], [mask1, mask2, mask3]
