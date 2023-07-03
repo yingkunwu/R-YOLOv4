@@ -9,6 +9,7 @@ from lib.options import TestOptions
 from lib.post_process import post_process, skewiou_2
 from lib.load import load_data
 from lib.utils import load_class_names
+from lib.loss import ComputeLoss
 from lib.logger import logger
 from model.yolo import Yolo
 
@@ -162,7 +163,7 @@ def calculate_eval_stats(stats, num_classes):
         return nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map
 
 
-def test(model, device, class_names, data_folder, dataset, img_size, batch_size, conf_thres, nms_thres):
+def test(model, compute_loss, device, class_names, data_folder, dataset, img_size, batch_size, conf_thres, nms_thres):
     model.eval()
 
     # Get dataloader
@@ -184,8 +185,9 @@ def test(model, device, class_names, data_folder, dataset, img_size, batch_size,
         seen += 1
 
         with torch.no_grad():
-            outputs, loss, loss_items = model(imgs, targets)
-            outputs = post_process(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+            outputs, masked_anchors = model(imgs)
+            loss, loss_items = compute_loss(outputs, targets, masked_anchors)
+            outputs = post_process(outputs, imgs.shape[2], conf_thres=conf_thres, nms_thres=nms_thres)
 
             total_loss += loss.detach().item()
 
@@ -243,8 +245,9 @@ class Test:
 
     def run(self):
         self.load_model()
+        compute_loss = ComputeLoss()
 
-        test(self.model, self.device, self.class_names, self.args.data_folder, self.args.dataset, 
+        test(self.model, compute_loss, self.device, self.class_names, self.args.data_folder, self.args.dataset, 
                 self.args.img_size, self.args.batch_size, self.args.conf_thres, self.args.nms_thres)
 
 

@@ -153,8 +153,8 @@ class Train:
                 targets = targets.to(self.device)
 
                 #outputs, loss, loss_items = self.model(imgs, targets)
-                output, masked_anchors = self.model(imgs)
-                loss, loss_items = compute_loss(output, targets, masked_anchors)
+                outputs, masked_anchors = self.model(imgs)
+                loss, loss_items = compute_loss(outputs, targets, masked_anchors)
 
                 loss.backward()
                 total_loss = loss.detach().item()
@@ -177,8 +177,10 @@ class Train:
             # -------------------
             # ------ Valid ------
             # -------------------
-            mp, mr, map50, map, loss, loss_items = test(self.model, self.device, self.class_names, self.args.data_folder, 
-                                self.args.dataset, self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65)
+            mp, mr, map50, map, loss, loss_items = test(
+                self.model, compute_loss, self.device, self.class_names, self.args.data_folder, 
+                self.args.dataset, self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65
+            )
 
             fit = fitness(np.array([mp, mr, map50, map]))
             if fit > best_fitness:
