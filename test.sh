@@ -1,0 +1,1 @@
+python test.py --data data/UCAS_AOD.yaml --hyp data/hyp.yaml --model_name UCAS_AOD --batch_size 8 --img_size 608

@@ -23,24 +23,13 @@ class Yolo(nn.Module):
         self.yolo3 = YoloLayer(num_classes=n_classes, anchors=[[142, 110], [192, 243], [459, 401]],
                                angles=angles, stride=32, scale_x_y=1.05, ignore_thresh=0.6)
 
-    def forward(self, i, target=None):
-        if target is None:
-            inference = True
-        else:
-            inference = False
-
+    def forward(self, i, inference=False):
         d3, d4, d5 = self.backbone(i)
         x20, x13, x6 = self.neck(d5, d4, d3, inference)
         x2, x10, x18 = self.head(x20, x13, x6)
-        out1, loss1, loss_items1 = self.yolo1(x2, target)
-        out2, loss2, loss_items2 = self.yolo2(x10, target)
-        out3, loss3, loss_items3 = self.yolo3(x18, target)
 
-        out = torch.cat([out1, out2, out3], 1)
-        loss = loss1 + loss2 + loss3
-        
-        loss_items = {}
-        for item in loss_items1.keys():
-            loss_items[item] = loss_items1[item] + loss_items2[item] + loss_items3[item]
+        out1, mask1 = self.yolo1(x2)
+        out2, mask2 = self.yolo2(x10)
+        out3, mask3 = self.yolo3(x18)
 
-        return out, loss, loss_items
+        return [out1, out2, out3], [mask1, mask2, mask3]

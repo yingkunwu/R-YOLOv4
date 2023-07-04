@@ -5,15 +5,6 @@ import cv2
 import torch.nn.functional as F
 
 
-def gaussian_noise(image, mean=0, var=100.0):
-    var = random.uniform(0, var)
-    noise = np.random.normal(mean, var ** 0.5, image.shape)
-    image = image.astype("float32")
-    out = image + noise
-    out = np.clip(out, 0.0, 255.0)
-    return out.astype(np.uint8)
-
-
 def hsv(img, hgain=0.015, sgain=0.7, vgain=0.4):
     # HSV color-space augmentation
     if hgain or sgain or vgain:
@@ -40,7 +31,6 @@ def vertical_flip(images, targets):
     images = torch.flip(images, [1])
     targets[:, 3] = 1 - targets[:, 3]
     targets[:, 6] = - targets[:, 6]
-
     return images, targets
 
 
@@ -48,17 +38,10 @@ def horisontal_flip(images, targets):
     images = torch.flip(images, [-1])
     targets[:, 2] = 1 - targets[:, 2]
     targets[:, 6] = - targets[:, 6]
-
     return images, targets
 
 
-def get_rot_mat(theta):
-    theta = torch.tensor(theta)
-    return torch.tensor([[torch.cos(theta), -torch.sin(theta), 0],
-                         [torch.sin(theta), torch.cos(theta), 0]])
-
-
-def random_warping(images, targets, degrees=10, scale = .9, translate = .1, border=(0, 0)):
+def random_warping(images, targets, degrees=10, scale=.9, translate=.1, border=(0, 0)):
     height = images.shape[0] + border[0] * 2  # shape(h, w, c)
     width = images.shape[1] + border[1] * 2
 

@@ -3,12 +3,13 @@ import numpy as np
 import os
 import tqdm
 import glob
-from terminaltables import AsciiTable
+import yaml
+import argparse
 
 from lib.options import TestOptions
 from lib.post_process import post_process, skewiou_2
 from lib.load import load_data
-from lib.utils import load_class_names
+from lib.loss import ComputeLoss
 from lib.logger import logger
 from model.yolo import Yolo
 
@@ -148,26 +149,27 @@ def get_batch_statistics(outputs, targets, iouv, niou):
 
 
 def calculate_eval_stats(stats, num_classes):
-        p, r, f1, mp, mr, map50, map = 0., 0., 0., 0., 0., 0., 0.
-        ap50, ap, ap_class = [], [], []
+    p, r, f1, mp, mr, map50, map = 0., 0., 0., 0., 0., 0., 0.
+    ap50, ap, ap_class = [], [], []
 
-        if len(stats) and stats[0].any():
-            p, r, ap, f1, ap_class = ap_per_class(*stats)
-            ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
-            mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-            nt = np.bincount(stats[3].astype(np.int64), minlength=num_classes)  # number of targets per class
-        else:
-            nt = torch.zeros(1)
+    if len(stats) and stats[0].any():
+        p, r, ap, f1, ap_class = ap_per_class(*stats)
+        ap50, ap = ap[:, 0], ap.mean(1)  # AP@0.5, AP@0.5:0.95
+        mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+        nt = np.bincount(stats[3].astype(np.int64), minlength=num_classes)  # number of targets per class
+    else:
+        nt = torch.zeros(1)
 
-        return nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map
+    return nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map
 
 
-def test(model, device, class_names, data_folder, dataset, img_size, batch_size, conf_thres, nms_thres):
+def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thres, nms_thres):
     model.eval()
 
     # Get dataloader
-    test_dataset, test_dataloader = load_data(data_folder, dataset, "test", img_size, batch_size=batch_size, 
-                                                shuffle=False, augment=False, mosaic=False, multiscale=False)
+    test_dataset, test_dataloader = load_data(
+        data['test'], data['names'], data['type'], hyp, img_size, batch_size, shuffle=False
+    )
 
     logger.info("Compute mAP...")
 
@@ -184,8 +186,9 @@ def test(model, device, class_names, data_folder, dataset, img_size, batch_size,
         seen += 1
 
         with torch.no_grad():
-            outputs, loss, loss_items = model(imgs, targets)
-            outputs = post_process(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+            outputs, masked_anchors = model(imgs)
+            loss, loss_items = compute_loss(outputs, targets, masked_anchors)
+            outputs = post_process(outputs, imgs.shape[2], conf_thres=conf_thres, nms_thres=nms_thres)
 
             total_loss += loss.detach().item()
 
@@ -203,7 +206,7 @@ def test(model, device, class_names, data_folder, dataset, img_size, batch_size,
     # Concatenate sample statistics
     stats = [np.concatenate(x, 0) for x in list(zip(*stats))]
     # Calculate mAP
-    nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map = calculate_eval_stats(stats, len(class_names))
+    nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map = calculate_eval_stats(stats, len(data['names']))
 
     # Print results
     logger.info(('%20s' + '%12s' * 6) % ('Class', 'Images', 'Labels', 'Precision', 'Recall', 'mAP@.5', 'mAP@.5:.95'))
@@ -212,7 +215,7 @@ def test(model, device, class_names, data_folder, dataset, img_size, batch_size,
     logger.info(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
 
     for i, c in enumerate(ap_class):
-        logger.info(pf % (class_names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
+        logger.info(pf % (data['names'][c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
     return mp, mr, map50, map, total_loss, total_loss_items
 
@@ -221,7 +224,6 @@ class Test:
     def __init__(self, args):
         self.args = args
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.class_names = load_class_names(os.path.join(self.args.data_folder, "class.names"))
         self.model = None
 
     def load_model(self):
@@ -237,21 +239,39 @@ class Test:
         else:
             assert False, "Model is not exist"
         pretrained_dict = torch.load(weight_path, map_location=torch.device('cpu'))
-        self.model = Yolo(n_classes=self.args.number_of_classes)
+        self.model = Yolo(n_classes=2)
         self.model = self.model.to(self.device)
         self.model.load_state_dict(pretrained_dict)
 
     def run(self):
         self.load_model()
 
-        test(self.model, self.device, self.class_names, self.args.data_folder, self.args.dataset, 
+        # load hyperparameters
+        with open(self.args.hyp, "r") as stream:
+            hyp = yaml.safe_load(stream)
+
+        # load data info
+        with open(self.args.data, "r") as stream:
+            data = yaml.safe_load(stream)
+
+        compute_loss = ComputeLoss(hyp)
+
+        test(self.model, compute_loss, self.device, data, hyp, 
                 self.args.img_size, self.args.batch_size, self.args.conf_thres, self.args.nms_thres)
 
 
 
 if __name__ == "__main__":
-    parser = TestOptions()
-    args = parser.parse()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model_name", type=str, default="UCAS_AOD", help="model name")
+    parser.add_argument("--conf_thres", type=float, default=0.001, help="object confidence threshold")
+    parser.add_argument("--nms_thres", type=float, default=0.65, help="iou thresshold for non-maximum suppression")
+    parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
+    parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
+    parser.add_argument("--data", type=str, default="", help=".yaml path for data")
+    parser.add_argument("--hyp", type=str, default="", help=".yaml path for hyperparameters")
+
+    args = parser.parse_args()
     print(args)
 
     t = Test(args)

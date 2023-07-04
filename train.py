@@ -6,13 +6,15 @@ import os
 import shutil
 import json
 import tqdm
+import yaml
+import argparse
 
 from model.yolo import Yolo
 from lib.load import load_data
 from lib.scheduler import CosineAnnealingWarmupRestarts
 from lib.logger import Logger, logger
 from lib.options import TrainOptions
-from lib.utils import load_class_names
+from lib.loss import ComputeLoss
 from test import test
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
@@ -44,7 +46,6 @@ class Train:
         self.args = args
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model_path = os.path.join("weights", self.args.model_name)
-        self.class_names = load_class_names(os.path.join(self.args.data_folder, "class.names"))
         self.model = None
         self.logger = None
 
@@ -65,7 +66,7 @@ class Train:
 
     def load_model(self):
         pretrained_dict = torch.load(self.args.weights_path)
-        self.model = Yolo(n_classes=self.args.number_of_classes)
+        self.model = Yolo(n_classes=2)
         self.model = self.model.to(self.device)
         model_dict = self.model.state_dict()
 
@@ -109,28 +110,31 @@ class Train:
         self.logger.list_of_scalars_summary(tensorboard_log, epoch)
 
     def train(self):
-        init()
         self.check_model_path()
         self.load_model()
         self.save_opts()
         self.logger = Logger(os.path.join(self.model_path, "logs"))
 
+        # load data info
+        with open(self.args.data, "r") as stream:
+            data = yaml.safe_load(stream)
 
-        augment = False if self.args.no_augmentation else True
-        mosaic = False if self.args.no_mosaic else True
-        multiscale = False if self.args.no_multiscale else True
+        # load hyperparameters
+        with open(self.args.hyp, "r") as stream:
+            hyp = yaml.safe_load(stream)
 
-        if multiscale:
-            logger.warning("Multiscale augmentation is not implemented.")
-
-        train_dataset, train_dataloader = load_data(self.args.data_folder, self.args.dataset, "train", self.args.img_size,
-                                                    self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
+        train_dataset, train_dataloader = load_data(
+            data['train'], data['names'], data['type'], hyp, self.args.img_size, self.args.batch_size, augment=True
+        )
         num_iters_per_epoch = len(train_dataloader)
 
-        scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
+        subdivisions = 64
+
+        scheduler_iters = round(self.args.epochs * len(train_dataloader) / subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
+
         # scheduler = CosineAnnealingWarmupRestarts(optimizer,
         #                                         first_cycle_steps=round(scheduler_iters),
         #                                         max_lr=self.args.lr,
@@ -138,7 +142,10 @@ class Train:
         #                                         warmup_steps=round(scheduler_iters * 0.1),
         #                                         cycle_mult=1,
         #                                         gamma=1)
-        scheduler = CosineAnnealingLR(optimizer,T_max = scheduler_iters, eta_min = 1e-5)
+        scheduler = CosineAnnealingLR(optimizer, T_max=scheduler_iters, eta_min=1e-5)
+        
+        compute_loss = ComputeLoss(hyp)
+
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
         
@@ -161,13 +168,15 @@ class Train:
                 imgs = imgs.to(self.device)
                 targets = targets.to(self.device)
 
-                outputs, loss, loss_items = self.model(imgs, targets)
+                #outputs, loss, loss_items = self.model(imgs, targets)
+                outputs, masked_anchors = self.model(imgs)
+                loss, loss_items = compute_loss(outputs, targets, masked_anchors)
 
                 loss.backward()
                 total_loss = loss.detach().item()
 
                 # TODO: make sure weight updating process
-                if global_step % self.args.subdivisions == 0:
+                if global_step % subdivisions == 0:
                     optimizer.step()
                     optimizer.zero_grad()
                     scheduler.step()
@@ -184,8 +193,11 @@ class Train:
             # -------------------
             # ------ Valid ------
             # -------------------
-            mp, mr, map50, map, loss, loss_items = test(self.model, self.device, self.class_names, self.args.data_folder, 
-                                self.args.dataset, self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65)
+            mp, mr, map50, map, loss, loss_items = test(
+                self.model, compute_loss, self.device, data, hyp, 
+                self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65
+            )
+
             self.logging_processes(loss_items, epoch, mean_recall = mr, mean_precision = mp ,map50 = map50, map5095 = map, val_mode = True)
 
             fit = fitness(np.array([mp, mr, map50, map]))
@@ -199,9 +211,19 @@ class Train:
 
         
 if __name__ == "__main__":
-    parser = TrainOptions()
-    args = parser.parse()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--epochs", type=int, default=50, help="number of epochs")
+    parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
+    parser.add_argument("--batch_size", type=int, default=4, help="size of batches")
+    parser.add_argument("--img_size", type=int, default=416, help="size of each image dimension")
+    parser.add_argument("--weights_path", type=str, default="weights/pretrained/yolov4.pth", help="path to pretrained weights file")
+    parser.add_argument("--model_name", type=str, default="trash", help="new model name")
+    parser.add_argument("--data", type=str, default="", help=".yaml path for data")
+    parser.add_argument("--hyp", type=str, default="", help=".yaml path for hyperparameters")
+
+    args = parser.parse_args()
     print(args)
 
+    init()
     t = Train(args)
     t.train()

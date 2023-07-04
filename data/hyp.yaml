@@ -1,0 +1,16 @@
+fl_gamma: 2.0  # focal loss gamma (efficientDet default gamma=1.5)
+ignore_thresh: 0.6 # threshold to ignore training negative samples
+box: 1.0  # box loss gain
+obj: 10.0  # obj loss gain (scale with pixels)
+cls: 1.0  # cls loss gain
+
+hsv_h: 0.015  # image HSV-Hue augmentation (fraction)
+hsv_s: 0.7  # image HSV-Saturation augmentation (fraction)
+hsv_v: 0.4  # image HSV-Value augmentation (fraction)
+rotate: 45  # image rotation (+/- deg)
+translate: 0.2  # image translation (+/- fraction)
+scale: 0.9  # image scale (+/- gain)
+flipud: 0.5  # image flip up-down (probability)
+fliplr: 0.5  # image flip left-right (probability)
+mosaic: 1.0  # image mosaic (probability)
+mixup: 0.15  # image mixup (probability)
