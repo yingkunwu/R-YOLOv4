@@ -1,8 +1,8 @@
 import math
 import torch
 
-from torch.optim.lr_scheduler import _LRScheduler
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import _LRScheduler, LambdaLR
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 
 # Reference: https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup
@@ -94,11 +94,17 @@ class CosineAnnealingWarmupRestarts(_LRScheduler):
         for param_group, lr in zip(self.optimizer.param_groups, self.get_lr()):
             param_group['lr'] = lr
 
+def one_cycle(y1=0.0, y2=1.0, steps=100):
+    # lambda function for sinusoidal ramp from y1 to y2
+    return lambda x: ((1 - math.cos(x * math.pi / steps)) / 2) * (y2 - y1) + y1
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     model = torch.nn.Linear(2, 1)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    epochs = 300
+    # lf = one_cycle(1, 0.1, epochs)
+    # scheduler = LambdaLR(optimizer, lr_lambda=lf)
     # lr_sched = CosineAnnealingWarmupRestarts(optimizer,
     #                                          first_cycle_steps=round((50 * 200 / 4)),
     #                                          cycle_mult=1.0,
@@ -106,11 +112,16 @@ if __name__ == "__main__":
     #                                          min_lr=1e-5,
     #                                          warmup_steps=round((50 * 200) / 4 * 0.1),
     #                                          gamma=1.0)
-    lr_sched = CosineAnnealingLR(optimizer,T_max = 50 * 200 / 4,eta_min = 1e-5)
+    t0 =  int((epochs * 200) / 4 * 0.05)
+    tm = round(((epochs * 200) / 4 - t0) / t0)
+
+    lr_sched = CosineAnnealingWarmRestarts(optimizer,T_0 = t0,T_mult = tm,eta_min = 1e-5)
+    # lr_sched = scheduler
+
     lrs = []
-    for i in range(50):
+    for i in range(epochs):
         for j in range(200):
-            global_step = 50 * 200 + j + 1
+            global_step = epochs * 200 + j + 1
             if global_step % 4 == 0:
                 optimizer.step()
 

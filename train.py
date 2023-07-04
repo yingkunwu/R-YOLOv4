@@ -148,6 +148,7 @@ class Train:
 
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
+        
 
         start_time = time.time()
         best_fitness = 0
