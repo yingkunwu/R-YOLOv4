@@ -2,6 +2,8 @@ import torch
 import time
 import os
 import glob
+import cv2 as cv
+import numpy as np
 
 from lib.options import DetectOptions
 from lib.plot import plot_boxes
@@ -9,6 +11,7 @@ from lib.post_process import post_process
 from lib.load import load_class_names
 from datasets.base_dataset import ImageDataset
 from model.yolo import Yolo
+from lib.logger import logger
 
 class Detect:
     def __init__(self, args):
@@ -51,35 +54,34 @@ class Detect:
         start = time.time()
         for img_path, img in dataloader:
             boxes, imgs = [], []
-
             img = img.to(self.device)
 
             with torch.no_grad():
                 temp = time.time()
-                output, _ = self.model(img)  # batch=1 -> [1, n, n], batch=3 -> [3, n, n]
+                output, _ ,_ = self.model(img,target = None)  # batch=1 -> [1, n, n], batch=3 -> [3, n, n]
                 temp1 = time.time()
                 box = post_process(output, self.args.conf_thres, self.args.nms_thres)
                 temp2 = time.time()
                 boxes.extend(box)
-                print('-----------------------------------')
+                logger.info('-----------------------------------')
                 num = 0
                 for b in box:
                     if b is None:
                         break
                     num += len(b)
-                print("{}-> {} objects found".format(img_path, num))
-                print("Inference time : ", round(temp1 - temp, 5))
-                print("Post-processing time : ", round(temp2 - temp1, 5))
-                print('-----------------------------------')
+                logger.info("{}-> {} objects found".format(img_path, num))
+                logger.info(("Inference time : ") + ('%10.4g') % (round(temp1 - temp, 5)))
+                logger.info(("Post-processing time : ") + ('%10.4g') % (round(temp2 - temp1, 5)))
+                logger.info('-----------------------------------')
 
             imgs.extend(img_path)
             self.save_results(imgs, boxes)
 
         end = time.time()
 
-        print('-----------------------------------')
-        print("Total detecting time : ", round(end - start, 5))
-        print('-----------------------------------')
+        logger.info('-----------------------------------')
+        logger.info(("Total detecting time : ") + ('%10.4g') % (round(end - start, 5)))
+        logger.info('-----------------------------------')
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ import logging
 from colorlog import ColoredFormatter
 from torch.utils.tensorboard import SummaryWriter
 
-
+# this logger is for tensorboard
 class Logger(object):
     def __init__(self, log_dir):
         """Create a summary writer logging to log_dir."""
@@ -13,7 +13,7 @@ class Logger(object):
         for tag, value in tag_value_dictionary.items():
             self.writer.add_scalar(tag, value, global_step=step)
 
-
+# this logger is for logging formatter
 def setup_logger(log_file_path: str = None):
     """Return a logger with a default ColoredFormatter."""
     formatter = ColoredFormatter(
