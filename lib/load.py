@@ -23,6 +23,6 @@ def load_data(data_dir, dataset, action, img_size=608, batch_size=4, shuffle=Tru
     else: 
         raise NotImplementedError
 
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=1, pin_memory=True, collate_fn=dataset.collate_fn)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=8, pin_memory=True, collate_fn=dataset.collate_fn)
 
     return dataset, dataloader

@@ -115,6 +115,7 @@ class Train:
         self.save_opts()
         self.logger = Logger(os.path.join(self.model_path, "logs"))
 
+
         augment = False if self.args.no_augmentation else True
         mosaic = False if self.args.no_mosaic else True
         multiscale = False if self.args.no_multiscale else True
@@ -140,6 +141,7 @@ class Train:
         scheduler = CosineAnnealingLR(optimizer,T_max = scheduler_iters, eta_min = 1e-5)
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
+        
 
         start_time = time.time()
         best_fitness = 0
