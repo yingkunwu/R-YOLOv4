@@ -1,1 +1,1 @@
-python test.py --data_folder data/UCAS_AOD --model_name UCAS_AOD --number_of_classes 2 --batch_size 8 --img_size 608 --dataset UCAS_AOD
+python test.py --data data/UCAS_AOD.yaml --hyp data/hyp.yaml --model_name UCAS_AOD --batch_size 8 --img_size 608

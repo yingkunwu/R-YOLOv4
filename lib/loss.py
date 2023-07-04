@@ -105,13 +105,13 @@ def bbox_xywha_ciou(pred_boxes, target_boxes):
 
 
 class ComputeLoss:
-    def __init__(self, hyp=None):
-        self.focal_loss = FocalLoss(reduction="mean")
+    def __init__(self, hyp):
+        self.focal_loss = FocalLoss(gamma=hyp['fl_gamma'], reduction="mean")
 
-        self.ignore_thresh = 0.6
-        self.lambda_coord = 1.0
-        self.lambda_conf_scale = 10.0
-        self.lambda_cls_scale = 1.0
+        self.ignore_thresh = hyp['ignore_thresh']
+        self.lambda_coord = hyp['box']
+        self.lambda_conf_scale = hyp['obj']
+        self.lambda_cls_scale = hyp['cls']
 
     def __call__(self, outputs, target, masked_anchors):
         device = target.device

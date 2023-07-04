@@ -4,13 +4,21 @@ sys.path.append('../R-YOLOv4')
 import cv2 as cv
 import numpy as np
 import os
+import yaml
+
 from lib.load import load_data
 
 
 if __name__ == "__main__":
-    #train_dataset, train_dataloader = load_data("data/trash", "custom", "train", 416, 1000, batch_size=1, mosaic=False, multiscale=False)
-    #train_dataset, train_dataloader = load_data("data/DOTA", "DOTA", "train", 800, 600, batch_size=1, mosaic=False, multiscale=False)
-    train_dataset, train_dataloader = load_data("data/UCAS_AOD", "UCAS_AOD", "train", 608, batch_size=1, mosaic=True, multiscale=False)
+    # load hyperparameters
+    with open("data/hyp.yaml", "r") as stream:
+        hyp = yaml.safe_load(stream)
+
+    # load data info
+    with open("data/UCAS_AOD.yaml", "r") as stream:
+        data = yaml.safe_load(stream)
+    
+    train_dataset, train_dataloader = load_data(data['train'], data['names'], data['type'], hyp, 608, 1, augment=True)
 
     for i, (img_path, imgs, targets) in enumerate(train_dataloader):
         print(targets)
