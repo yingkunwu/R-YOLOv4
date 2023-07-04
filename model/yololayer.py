@@ -1,7 +1,8 @@
 # References: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/models.py
 
+import torch
+import torch.nn as nn
 import numpy as np
-from model.loss import *
 
 
 class YoloLayer(nn.Module):
