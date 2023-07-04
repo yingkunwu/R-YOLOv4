@@ -93,11 +93,12 @@ def post_process(predictions, img_size, conf_thres=0.5, nms_thres=0.4):
         (x1, y1, x2, y2, object_conf, class_score, class_pred)
     """
     batch_size = predictions[0].size(0)
-    pred_dim = predictions[0].size(-1)
+    pred_dim = predictions[0].size(-1) - 1
 
     predictions_ = []
     for pred in predictions:
         pred[..., :4] = pred[..., :4] * (img_size / pred.size(2))
+        pred = torch.cat((pred[..., :5], pred[..., 6:]), -1)
         predictions_.append(pred.view(batch_size, -1, pred_dim))
     predictions = torch.cat(predictions_, 1)
     

@@ -99,7 +99,9 @@ def bbox_xywha_ciou(pred_boxes, target_boxes):
     ciou = iou - (u + alpha * v)
     ciou = torch.clamp(ciou, min=-1.0, max=1.0)
 
-    return iou, ciou
+    ariou = torch.abs(torch.cos(pred_boxes[:, 4] - target_boxes[:, 4])) * iou
+
+    return ariou, ciou
 
 
 class ComputeLoss:
@@ -118,10 +120,10 @@ class ComputeLoss:
         reg_loss, conf_loss, cls_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
 
         for output, masked_anchor in zip(outputs, masked_anchors):
-            pbbox = output[..., :4] # prediction of (x, y, w, h)
-            pa = output[..., 4] # prediction of angle
-            pconf = output[..., 5] # prediction of confidence score
-            pcls = output[..., 6:] # prediction of class
+            pbbox = output[..., :5] # prediction of (x, y, w, h, a)
+            pa = output[..., 5] # prediction of angle
+            pconf = output[..., 6] # prediction of confidence score
+            pcls = output[..., 7:] # prediction of class
 
             # num of (batches, anchors(3*6), downsample grid sizes, _ , classes)
             nB, nA, nG, _, nC = pcls.size()
@@ -137,18 +139,17 @@ class ComputeLoss:
                 #    img_size = self.stride * nG
                 #    bbox_loss_scale = 2.0 - 1.0 * gwh[:, 0] * gwh[:, 1] / (img_size ** 2)
                 #ciou = bbox_loss_scale * (1.0 - ciou)
-                iou, ciou = bbox_xywha_ciou(pbbox[obj_mask], tbbox[obj_mask])
+                ariou, ciou = bbox_xywha_ciou(pbbox[obj_mask], tbbox[obj_mask])
                 ciou = (1.0 - ciou)
-
-                skew_iou = torch.abs(torch.cos(pa[obj_mask] - ta[obj_mask])) * iou
-                skew_iou = torch.exp(1 - skew_iou) - 1 # scale the magnitude of skewIoU
 
                 angle_loss = F.smooth_l1_loss(pa[obj_mask], ta[obj_mask], reduction="none")
 
                 reg_vector = angle_loss + ciou
 
                 with torch.no_grad():
-                    reg_magnitude = skew_iou / reg_vector
+                    ariou = torch.exp(1 - ariou) - 1 # scale the magnitude of ArIoU
+                    reg_magnitude = ariou / reg_vector
+
                 reg_loss += (reg_magnitude * reg_vector).mean()
 
                 # Focal Loss for object's prediction
@@ -181,7 +182,7 @@ class ComputeLoss:
         # Output tensors
         obj_mask = torch.zeros((nB, nA, nG, nG), device=device)
         noobj_mask = torch.ones((nB, nA, nG, nG), device=device)
-        tbbox = torch.zeros((nB, nA, nG, nG, 4), device=device)
+        tbbox = torch.zeros((nB, nA, nG, nG, 5), device=device)
         ta = torch.zeros((nB, nA, nG, nG), device=device)
         tcls = torch.zeros((nB, nA, nG, nG, nC), device=device)
 
@@ -227,7 +228,7 @@ class ComputeLoss:
             noobj_mask[b[i], (anchor_ious > 0.4) & (angle_offset < (np.pi / 12)), gj[i], gi[i]] = 0
 
         # Bounding Boxes
-        tbbox[b, best_n, gj, gi] = torch.cat((gxy, gwh), -1)
+        tbbox[b, best_n, gj, gi] = torch.cat((gxy, gwh, ga.unsqueeze(-1)), -1)
 
         # Angle (encode)
         ta[b, best_n, gj, gi] = ga - masked_anchors[best_n][:, 2]

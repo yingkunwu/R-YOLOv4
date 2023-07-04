@@ -71,6 +71,7 @@ class YoloLayer(nn.Module):
         output = torch.cat(
             (
                 torch.cat([pred_boxes[..., :4], pred_boxes[..., 4:]], dim=-1),
+                pred_a.unsqueeze(-1),
                 pred_conf.unsqueeze(-1),
                 pred_cls
             ),
