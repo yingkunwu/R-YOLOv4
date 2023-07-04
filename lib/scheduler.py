@@ -2,6 +2,7 @@ import math
 import torch
 
 from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
 # Reference: https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup
@@ -98,14 +99,14 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     model = torch.nn.Linear(2, 1)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-    lr_sched = CosineAnnealingWarmupRestarts(optimizer,
-                                             first_cycle_steps=round((50 * 200 / 4)),
-                                             cycle_mult=1.0,
-                                             max_lr=0.001,
-                                             min_lr=1e-5,
-                                             warmup_steps=round((50 * 200) / 4 * 0.1),
-                                             gamma=1.0)
-
+    # lr_sched = CosineAnnealingWarmupRestarts(optimizer,
+    #                                          first_cycle_steps=round((50 * 200 / 4)),
+    #                                          cycle_mult=1.0,
+    #                                          max_lr=0.001,
+    #                                          min_lr=1e-5,
+    #                                          warmup_steps=round((50 * 200) / 4 * 0.1),
+    #                                          gamma=1.0)
+    lr_sched = CosineAnnealingLR(optimizer,T_max = 50 * 200 / 4,eta_min = 1e-5)
     lrs = []
     for i in range(50):
         for j in range(200):

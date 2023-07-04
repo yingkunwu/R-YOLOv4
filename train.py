@@ -90,14 +90,23 @@ class Train:
         with open(os.path.join(self.model_path, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
     
-    def logging_processes(self, total_loss, loss_items, epoch, global_step, total_step, start_time)->dict:
+    def logging_processes(self, loss_items, epoch,mean_recall = None,mean_precision = None ,map50 = None, map5095 = None, val_mode = False)->None:
         tensorboard_log = {}
+        # update in validation 
+        if val_mode and map50 != None and map5095 != None:
+            for name, metric in loss_items.items():
+                tensorboard_log[f"val/{name}"] = metric
 
-        for name, metric in loss_items.items():
-            tensorboard_log[f"{name}"] = metric
+            tensorboard_log["mean recall"] = mean_recall
+            tensorboard_log["mean precision"] = mean_precision
+            tensorboard_log["mAP@.5"] = map50
+            tensorboard_log["mAP@.5:.95"] = map5095
+        # update in training 
+        else:
+            for name, metric in loss_items.items():
+                tensorboard_log[f"train/{name}"] = metric
 
-        tensorboard_log["total_loss"] = total_loss
-        self.logger.list_of_scalars_summary(tensorboard_log, global_step)
+        self.logger.list_of_scalars_summary(tensorboard_log, epoch)
 
     def train(self):
         init()
@@ -117,7 +126,7 @@ class Train:
                                                     self.args.batch_size, augment=augment, mosaic=mosaic, multiscale=multiscale)
         num_iters_per_epoch = len(train_dataloader)
 
-        #scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
+        scheduler_iters = round(self.args.epochs * len(train_dataloader) / self.args.subdivisions)
         total_step = num_iters_per_epoch * self.args.epochs
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
@@ -128,7 +137,7 @@ class Train:
         #                                         warmup_steps=round(scheduler_iters * 0.1),
         #                                         cycle_mult=1,
         #                                         gamma=1)
-        scheduler = CosineAnnealingLR(optimizer,T_max = self.args.epochs,eta_min = 1e-5)
+        scheduler = CosineAnnealingLR(optimizer,T_max = scheduler_iters, eta_min = 1e-5)
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
 
@@ -160,8 +169,6 @@ class Train:
                     optimizer.step()
                     optimizer.zero_grad()
                     scheduler.step()
-                    
-                self.logging_processes(total_loss, loss_items, epoch, global_step, total_step, start_time)
                 
                 s = ('%10s'  + '%10.4g' * 6) % (
                     '%g/%g' % (epoch, self.args.epochs),scheduler.get_last_lr()[0],  loss_items["reg_loss"],
@@ -169,12 +176,15 @@ class Train:
 
                 pbar.set_description(s)
                 pbar.update(0)
+            # update the training log for tensorboard every epoch    
+            self.logging_processes(loss_items, epoch)
 
             # -------------------
             # ------ Valid ------
             # -------------------
             mp, mr, map50, map, loss, loss_items = test(self.model, self.device, self.class_names, self.args.data_folder, 
                                 self.args.dataset, self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65)
+            self.logging_processes(loss_items, epoch, mean_recall = mr, mean_precision = mp ,map50 = map50, map5095 = map, val_mode = True)
 
             fit = fitness(np.array([mp, mr, map50, map]))
             if fit > best_fitness:
