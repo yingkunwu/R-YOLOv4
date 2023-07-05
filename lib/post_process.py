@@ -45,6 +45,13 @@ def skewiou(box1, box2):
         x, y, w, h, theta = np.array(box)
         points = cv.boxPoints(((x, y), (w, h), theta / np.pi * 180))
         return Polygon(points)
+    
+    def get_iou(polygon1, polygon2):
+        if polygon1.intersects(polygon2): 
+            intersect = polygon1.intersection(polygon2).area
+            union = polygon1.union(polygon2).area
+            return intersect/union
+        return 0
 
     iou = []
     g = rbox2polygon(box1)
@@ -54,10 +61,11 @@ def skewiou(box1, box2):
         if not g.is_valid or not p.is_valid:
             raise AssertionError("something went wrong in skew iou")
 
-        inter = g.intersection(p).area
-        union = g.area + p.area - inter
+        # inter = g.intersection(p).area
+        # union = g.area + p.area - inter
 
-        iou.append(torch.tensor(inter / (union + 1e-16)))
+        # iou.append(torch.tensor(inter / (union + 1e-16)))
+        iou.append(torch.tensor(get_iou(g, p)))
     return torch.stack(iou)
 
 

@@ -16,6 +16,7 @@ from lib.logger import Logger, logger
 from lib.options import TrainOptions
 from lib.loss import ComputeLoss
 from test import test
+from torch.optim.lr_scheduler import CosineAnnealingLR
 
 
 def weights_init_normal(m):
@@ -90,14 +91,23 @@ class Train:
         with open(os.path.join(self.model_path, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
     
-    def logging_processes(self, total_loss, loss_items, epoch, global_step, total_step, start_time)->dict:
+    def logging_processes(self, loss_items, epoch,mean_recall = None,mean_precision = None ,map50 = None, map5095 = None, val_mode = False)->None:
         tensorboard_log = {}
+        # update in validation 
+        if val_mode and map50 != None and map5095 != None:
+            for name, metric in loss_items.items():
+                tensorboard_log[f"val/{name}"] = metric
 
-        for name, metric in loss_items.items():
-            tensorboard_log[f"{name}"] = metric
+            tensorboard_log["mean recall"] = mean_recall
+            tensorboard_log["mean precision"] = mean_precision
+            tensorboard_log["mAP@.5"] = map50
+            tensorboard_log["mAP@.5:.95"] = map5095
+        # update in training 
+        else:
+            for name, metric in loss_items.items():
+                tensorboard_log[f"train/{name}"] = metric
 
-        tensorboard_log["total_loss"] = total_loss
-        self.logger.list_of_scalars_summary(tensorboard_log, global_step)
+        self.logger.list_of_scalars_summary(tensorboard_log, epoch)
 
     def train(self):
         self.check_model_path()
@@ -124,13 +134,15 @@ class Train:
         total_step = num_iters_per_epoch * self.args.epochs
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
-        scheduler = CosineAnnealingWarmupRestarts(optimizer,
-                                                first_cycle_steps=round(scheduler_iters),
-                                                max_lr=self.args.lr,
-                                                min_lr=1e-5,
-                                                warmup_steps=round(scheduler_iters * 0.1),
-                                                cycle_mult=1,
-                                                gamma=1)
+
+        # scheduler = CosineAnnealingWarmupRestarts(optimizer,
+        #                                         first_cycle_steps=round(scheduler_iters),
+        #                                         max_lr=self.args.lr,
+        #                                         min_lr=1e-5,
+        #                                         warmup_steps=round(scheduler_iters * 0.1),
+        #                                         cycle_mult=1,
+        #                                         gamma=1)
+        scheduler = CosineAnnealingLR(optimizer, T_max=scheduler_iters, eta_min=1e-5)
         
         compute_loss = ComputeLoss(hyp)
 
@@ -146,7 +158,7 @@ class Train:
             # -------------------
             self.model.train()
       
-            logger.info(('\n' + '%10s' * 6) % ('Epoch', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
+            logger.info(('\n' + '%10s' * 7) % ('Epoch', 'last lr', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
             pbar = enumerate(train_dataloader)
             pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
             #pbar = enumerate(tqdm.tqdm(train_dataloader))
@@ -167,15 +179,15 @@ class Train:
                     optimizer.step()
                     optimizer.zero_grad()
                     scheduler.step()
-                    
-                self.logging_processes(total_loss, loss_items, epoch, global_step, total_step, start_time)
                 
-                s = ('%10s'  + '%10.4g' * 5) % (
-                    '%g/%g' % (epoch, self.args.epochs),  loss_items["reg_loss"],
+                s = ('%10s'  + '%10.4g' * 6) % (
+                    '%g/%g' % (epoch, self.args.epochs),scheduler.get_last_lr()[0],  loss_items["reg_loss"],
                     loss_items["conf_loss"], loss_items["cls_loss"], total_loss, imgs.shape[-1])
 
                 pbar.set_description(s)
                 pbar.update(0)
+            # update the training log for tensorboard every epoch    
+            self.logging_processes(loss_items, epoch)
 
             # -------------------
             # ------ Valid ------
@@ -184,6 +196,8 @@ class Train:
                 self.model, compute_loss, self.device, data, hyp, 
                 self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65
             )
+
+            self.logging_processes(loss_items, epoch, mean_recall = mr, mean_precision = mp ,map50 = map50, map5095 = map, val_mode = True)
 
             fit = fitness(np.array([mp, mr, map50, map]))
             if fit > best_fitness:
