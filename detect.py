@@ -60,7 +60,7 @@ class Detect:
                 temp = time.time()
                 output, _  = self.model(img)  # batch=1 -> [1, n, n], batch=3 -> [3, n, n]
                 temp1 = time.time()
-                box = post_process(output, self.args.conf_thres, self.args.nms_thres)
+                box = post_process(output,self.args.img_size, self.args.conf_thres, self.args.nms_thres)
                 print(box)
                 temp2 = time.time()
                 boxes.extend(box)
