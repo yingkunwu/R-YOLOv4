@@ -34,14 +34,13 @@ def iou(box1, box2, nms_thres):
     mask = iou > 0.3
     large_overlap = torch.zeros(box2.shape[0], dtype=torch.bool)
 
-    large_overlap[mask] = skewiou(box1, box2[mask]) > nms_thres
+    if torch.any(mask):
+        large_overlap[mask] = skewiou(box1, box2[mask]) > nms_thres
 
     return large_overlap
 
 
 def skewiou(box1, box2):
-    assert len(box1) == 5 and len(box2[0]) == 5
-
     def rbox2polygon(box):
         x, y, w, h, theta = np.array(box)
         points = cv.boxPoints(((x, y), (w, h), theta / np.pi * 180))
@@ -137,14 +136,20 @@ def post_process(predictions, img_size, conf_thres=0.5, nms_thres=0.4):
         for label in labels:
             detect = detections[detections[:, -1] == label]
             while len(detect):
-                #large_overlap = skewiou(detect[0, :5], detect[:, :5]) > nms_thres
-                large_overlap = iou(detect[0, :5], detect[:, :5], nms_thres)
-                # Indices of boxes with lower confidence scores, large IOUs and matching labels
-                weights = detect[large_overlap, 5:6]
-                # Merge overlapping bboxes by order of confidence
-                detect[0, :4] = (weights * detect[large_overlap, :4]).sum(0) / weights.sum()
-                keep_boxes += [detect[0]]
-                detect = detect[~large_overlap]
+                best_bbox = detect[0]
+                detect = detect[1:]
+                if len(detect):
+                    # Get indices of boxes with lower confidence scores, large IOUs and matching labels
+                    large_overlap = iou(best_bbox[:5], detect[:, :5], nms_thres)
+                    # keep only boxes that has iou smaller than the nms threshold
+                    throwayay = detect[large_overlap]
+                    detect = detect[~large_overlap]
+                    # Merge overlapping bboxes by order of confidence
+                    weights = throwayay[:, 5:6]
+                    best_bbox[:4] = best_bbox[:4] * best_bbox[5] + (weights * throwayay[:, :4]).sum(0)
+                    best_bbox[:4] /= (best_bbox[5] + weights.sum())
+                # store bboxes with high confidence scores
+                keep_boxes.append(best_bbox)
 
         if keep_boxes:
             keep_boxes = torch.stack(keep_boxes)
