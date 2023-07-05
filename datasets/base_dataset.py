@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
-from lib.augmentations import vertical_flip, horisontal_flip, hsv, gaussian_noise, mixup, random_warping
+from lib.augmentations import hsv, vertical_flip, horisontal_flip, mixup, random_warping
 
 
 def pad_to_square(img, new_shape, pad_value, stride=32):
@@ -19,11 +19,15 @@ def pad_to_square(img, new_shape, pad_value, stride=32):
     r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
 
     # Compute padding
-    ratio = r, r  # width, height ratios
     new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+
     dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
+
     dw /= 2  # divide padding into 2 sides
     dh /= 2
+
+    if shape[::-1] != new_unpad:  # resize
+        img = cv2.resize(img, new_unpad, interpolation=cv2.INTER_LINEAR)
 
     top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
     left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
@@ -34,9 +38,6 @@ def pad_to_square(img, new_shape, pad_value, stride=32):
 
 
 class ImageDataset(Dataset):
-    # TODO: apply ImageDataset to detect.py (inference)
-    # Reference: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/utils/datasets.py
-
     def __init__(self, folder_path, img_size=416, ext="png"):
         self.files = sorted(glob.glob(os.path.join(folder_path, "*.{}".format(ext))))
         self.img_size = img_size
@@ -50,68 +51,65 @@ class ImageDataset(Dataset):
         img_path = self.files[index % len(self.files)]
 
         # Extract image as PyTorch tensor
-        img = transforms.ToTensor()(Image.open(img_path).convert('RGB'))
+        img = np.array(Image.open(img_path).convert('RGB'))
         # Pad to square resolution
         img, _ = pad_to_square(img, (self.img_size, self.img_size), 0)
-        # Resize
-        img = F.interpolate(img.unsqueeze(0), size=self.img_size, mode="bilinear").squeeze(0)
-        #transform = transforms.ToPILImage(mode="RGB")
-        #image = transform(img)
-        #image.show()
+        # Turn into tensor
+        img = transforms.ToTensor()(img)
+
         return img_path, img
 
 class BaseDataset(Dataset):
-    def __init__(self, img_size=608, augment=True, mosaic=True, multiscale=True, normalized_labels=False):
+    def __init__(self, hyp, img_size=608, augment=False, normalized_labels=False):
+        self.hyp = hyp
         self.img_size = img_size
         self.augment = augment
-        self.mosaic = mosaic
-        self.mosaic_border = [-img_size // 2, -img_size // 2]
-        self.multiscale = multiscale
         self.normalized_labels = normalized_labels
-        self.min_size = self.img_size - 3 * 32
-        self.max_size = self.img_size + 3 * 32
-        self.batch_count = 0
-
-        self.img_files = None
-        self.label_files = None
+        self.mosaic_border = [-img_size // 2, -img_size // 2]
 
     def __getitem__(self, index):
-        if self.mosaic:
+        if self.augment and random.random() < self.hyp['mosaic']:
+            # mosaic augmentation
             if random.random() < 0.8:
                 img, targets = self.load_mosaic(index)
             else:
                 img, targets = self.load_mosaic9(index)
-            img, targets = random_warping(img, targets, scale = .5, translate = .1, border=self.mosaic_border)
-
-            if np.random.random() < 0.5:
+            # perform rotate, scale, and translate augmentations
+            img, targets = random_warping(
+                img, targets, self.hyp['rotate'], self.hyp['scale'], self.hyp['translate'], self.mosaic_border
+            )
+            # mixup augmentation
+            if np.random.random() < self.hyp['mixup']:
                 if random.random() < 0.8:
                     img2, targets2 = self.load_mosaic(random.randint(0, len(self.img_files) - 1))
                 else:
                     img2, targets2 = self.load_mosaic9(random.randint(0, len(self.img_files) - 1))
-                img2, targets2 = random_warping(img2, targets2, scale = .5, translate = .1, border=self.mosaic_border)
-
+                # perform rotate, scale, and translate augmentations
+                img2, targets2 = random_warping(
+                    img2, targets2, self.hyp['rotate'], self.hyp['scale'], self.hyp['translate'], self.mosaic_border
+                )
                 img, targets = mixup(img, targets, img2, targets2)
         else:
             img, (h0, w0), (h, w) = self.load_image(index)
             img, pad = pad_to_square(img, (self.img_size, self.img_size), 0)
 
             targets = self.load_target(index, pad, (h0, w0), (h, w))
-            
-            if self.augment:
-                img, targets = random_warping(img, targets, scale = .5, translate = .1)
 
+            if self.augment: 
+                # perform rotate, scale, and translate augmentations
+                img, targets = random_warping(img, targets, self.hyp['rotate'], self.hyp['scale'], self.hyp['translate'])
+
+        # Remove objects that exceed the size of images
         targets = self.filtering(targets, (0, img.shape[1], 0, img.shape[0]))
         targets = self.normalize(targets, img.shape[:2])
         img = transforms.ToTensor()(img)
 
-        # TODO: reshpae image size to img_size
-
-        # Apply augmentations
-        if self.augment:
-            if np.random.random() < 0.5:
-                img, targets = horisontal_flip(img, targets)
-            if np.random.random() < 0.5:
-                img, targets = vertical_flip(img, targets)
+        # horizontal flip augmentation
+        if self.augment and np.random.random() < self.hyp['fliplr']:
+            img, targets = horisontal_flip(img, targets)
+        # vertical flip augmentation
+        if self.augment and np.random.random() < self.hyp['flipud']:
+            img, targets = vertical_flip(img, targets)
 
         return self.img_files[index], img, targets
 
@@ -143,8 +141,7 @@ class BaseDataset(Dataset):
             img = cv2.resize(img, (int(w * r), int(h * r)), interpolation=interp)
 
         if self.augment:
-            #img = gaussian_noise(img) # np.random.normal(mean, var ** 0.5, image.shape) would increase run time significantly
-            hsv(img)
+            hsv(img, self.hyp['hsv_h'], self.hyp['hsv_s'], self.hyp['hsv_v'])
 
         return img, (h, w), img.shape[:2]
 

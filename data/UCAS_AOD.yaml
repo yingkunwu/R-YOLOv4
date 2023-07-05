@@ -1,0 +1,8 @@
+type: UCAS_AOD # specify a dataset class to load data
+
+train: data/UCAS_AOD/train  # path to load train data
+val: data/UCAS_AOD/val  # path to load val data
+test: data/UCAS_AOD/test  # path to load test data
+
+# class names
+names: ['car', 'airplane']

@@ -3,14 +3,7 @@ import numpy as np
 import cv2 as cv
 import os
 
-
-def xywh2xyxy(x):
-    y = x.new(x.shape)
-    y[..., 0] = x[..., 0] - x[..., 2] / 2
-    y[..., 1] = x[..., 1] - x[..., 3] / 2
-    y[..., 2] = x[..., 0] + x[..., 2] / 2
-    y[..., 3] = x[..., 1] + x[..., 3] / 2
-    return y
+from lib.general import xywh2xyxy
 
 
 def rescale_boxes(boxes, current_dim, original_shape):
@@ -50,7 +43,7 @@ def get_color(c, x, max_val):
 def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None):
     img = np.array(cv.imread(img_path))
 
-    if boxes is not None:
+    if len(boxes):
         boxes = rescale_boxes(boxes, img_size, img.shape[:2])
         boxes = np.array(boxes)
 
