@@ -185,7 +185,7 @@ class ComputeLoss:
         tbbox = torch.zeros((nB, nA, nG, nG, 5), device=device)
         ta = torch.zeros((nB, nA, nG, nG), device=device)
         tcls = torch.zeros((nB, nA, nG, nG, nC), device=device)
-
+        #print(nA,nG,nB)
         # Convert ground truth position to position that relative to the size of box (grid size)
 
         # target_boxes (x, y, w, h), originally normalize w.r.t grids
@@ -196,6 +196,8 @@ class ComputeLoss:
         # Get anchors with best iou and their angle difference with ground truths
         arious = []
         offset = []
+        #print("targets :",target.size())
+        #print("mask anchor: ", masked_anchors.size())
         with torch.no_grad():
             for anchor in masked_anchors:
                 ariou = anchor_wh_iou(anchor[:2], gwh)
@@ -205,6 +207,8 @@ class ComputeLoss:
             arious = torch.stack(arious)
             offset = torch.stack(offset)
         best_ious, best_n = arious.max(0)
+        #print("ariou",ariou.size())
+        #print("best n",best_n.size())
 
         # Separate target values
         # b indicates which batch, target_labels is the class label (0 or 1)
@@ -214,11 +218,12 @@ class ComputeLoss:
         # Avoid the error caused by the wrong position of the center coordinate of objects
         gi = torch.clamp(gi, 0, nG - 1)
         gj = torch.clamp(gj, 0, nG - 1)
-
+        #print(gi)
         # Set masks to specify object's location
         # for img the row is y and col is x
         obj_mask[b, best_n, gj, gi] = 1
         noobj_mask[b, best_n, gj, gi] = 0
+        #print("obj_mask",obj_mask.size())
 
         # TODO: verify that the code here is correct
         # Set noobj mask to zero where iou exceeds ignore threshold

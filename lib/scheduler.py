@@ -1,8 +1,10 @@
 import math
 import torch
+import numpy as np
 
 from torch.optim.lr_scheduler import _LRScheduler, LambdaLR
-from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts,CosineAnnealingLR
+from ignite.handlers import create_lr_scheduler_with_warmup
 
 
 # Reference: https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup
@@ -103,8 +105,7 @@ if __name__ == "__main__":
     model = torch.nn.Linear(2, 1)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     epochs = 300
-    # lf = one_cycle(1, 0.1, epochs)
-    # scheduler = LambdaLR(optimizer, lr_lambda=lf)
+
     # lr_sched = CosineAnnealingWarmupRestarts(optimizer,
     #                                          first_cycle_steps=round((50 * 200 / 4)),
     #                                          cycle_mult=1.0,
@@ -115,14 +116,33 @@ if __name__ == "__main__":
     t0 =  int((epochs * 200) / 4 * 0.05)
     tm = round(((epochs * 200) / 4 - t0) / t0)
 
-    lr_sched = CosineAnnealingWarmRestarts(optimizer,T_0 = t0,T_mult = tm,eta_min = 1e-5)
+    lf = one_cycle(1, 0.1, epochs * 200/4)
+    lr_sched = LambdaLR(optimizer, lr_lambda=lf)
+    # lr_sched = CosineAnnealingLR(optimizer,T_max = t0 * 0.95,eta_min = 1e-5)
+    # lr_sched = create_lr_scheduler_with_warmup(lr_sched,
+    #                                         warmup_start_value=0.0,
+    #                                         warmup_end_value=0.001,
+    #                                         warmup_duration=t0)
+
+
+    #lr_sched = CosineAnnealingWarmRestarts(optimizer,T_0 = t0,T_mult = tm,eta_min = 1e-5)
     # lr_sched = scheduler
+    accumulate = 4
 
     lrs = []
     for i in range(epochs):
         for j in range(200):
             global_step = epochs * 200 + j + 1
-            if global_step % 4 == 0:
+                        # Warmup
+            if global_step <= t0:
+                xi = [0, t0]  # x interp
+                # model.gr = np.interp(ni, xi, [0.0, 1.0])  # iou loss ratio (obj_loss = 1.0 or iou)
+                accumulate = max(1, np.interp(global_step, xi, [1, 4]).round())
+                for y, x in enumerate(optimizer.param_groups):
+                    # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                    x['lr'] = np.interp(global_step, xi, [0.1 if y == 2 else 0.0, x['initial_lr'] * lf(epochs)])
+
+            if global_step % accumulate == 0:
                 optimizer.step()
 
                 lrs.append(

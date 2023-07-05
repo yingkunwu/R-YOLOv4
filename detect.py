@@ -45,7 +45,7 @@ class Detect:
             plot_boxes(img_path, box, self.class_names, self.args.img_size, save_folder)
 
     def detect(self):
-        dataset = ImageDataset(os.path.join(self.args.data_folder, "detect"), img_size=self.args.img_size, ext=self.args.ext)
+        dataset = ImageDataset(os.path.join(self.args.data_folder, "infer"), img_size=self.args.img_size, ext=self.args.ext)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.args.batch_size, shuffle=False)
 
         self.load_model()
@@ -58,9 +58,10 @@ class Detect:
 
             with torch.no_grad():
                 temp = time.time()
-                output, _ ,_ = self.model(img,target = None)  # batch=1 -> [1, n, n], batch=3 -> [3, n, n]
+                output, _  = self.model(img)  # batch=1 -> [1, n, n], batch=3 -> [3, n, n]
                 temp1 = time.time()
                 box = post_process(output, self.args.conf_thres, self.args.nms_thres)
+                print(box)
                 temp2 = time.time()
                 boxes.extend(box)
                 logger.info('-----------------------------------')
@@ -69,6 +70,7 @@ class Detect:
                     if b is None:
                         break
                     num += len(b)
+                print(num)
                 logger.info("{}-> {} objects found".format(img_path, num))
                 logger.info(("Inference time : ") + ('%10.4g') % (round(temp1 - temp, 5)))
                 logger.info(("Post-processing time : ") + ('%10.4g') % (round(temp2 - temp1, 5)))
