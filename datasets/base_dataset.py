@@ -15,12 +15,10 @@ from lib.augmentations import hsv, vertical_flip, horisontal_flip, mixup, random
 def pad_to_square(img, new_shape, pad_value, stride=32):
     shape = img.shape[:2]
 
-
     # Scale ratio (new / old)
     r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
 
     # Compute padding
-    ratio = r, r  # width, height ratios
     new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
 
     dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
@@ -40,9 +38,6 @@ def pad_to_square(img, new_shape, pad_value, stride=32):
 
 
 class ImageDataset(Dataset):
-    # TODO: apply ImageDataset to detect.py (inference)
-    # Reference: https://github.com/eriklindernoren/PyTorch-YOLOv3/blob/master/utils/datasets.py
-
     def __init__(self, folder_path, img_size=416, ext="png"):
         self.files = sorted(glob.glob(os.path.join(folder_path, "*.{}".format(ext))))
         self.img_size = img_size
@@ -61,9 +56,7 @@ class ImageDataset(Dataset):
         img, _ = pad_to_square(img, (self.img_size, self.img_size), 0)
         # Turn into tensor
         img = transforms.ToTensor()(img)
-        # transform = transforms.ToPILImage(mode="RGB")
-        # image = transform(img)
-        # image.show()
+
         return img_path, img
 
 class BaseDataset(Dataset):

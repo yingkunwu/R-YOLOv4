@@ -3,14 +3,7 @@ import cv2 as cv
 import numpy as np
 from shapely.geometry import Polygon
 
-
-def xywh2xyxy(x):
-    y = x.new(x.shape)
-    y[..., 0] = x[..., 0] - x[..., 2] / 2
-    y[..., 1] = x[..., 1] - x[..., 3] / 2
-    y[..., 2] = x[..., 0] + x[..., 2] / 2
-    y[..., 3] = x[..., 1] + x[..., 3] / 2
-    return y
+from lib.general import xywh2xyxy
 
 
 def iou(box1, box2, nms_thres):
@@ -61,10 +54,6 @@ def skewiou(box1, box2):
         if not g.is_valid or not p.is_valid:
             raise AssertionError("something went wrong in skew iou")
 
-        # inter = g.intersection(p).area
-        # union = g.area + p.area - inter
-
-        # iou.append(torch.tensor(inter / (union + 1e-16)))
         iou.append(torch.tensor(get_iou(g, p)))
     return torch.stack(iou)
 

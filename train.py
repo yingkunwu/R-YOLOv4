@@ -13,10 +13,10 @@ from model.yolo import Yolo
 from lib.load import load_data
 from lib.scheduler import CosineAnnealingWarmupRestarts
 from lib.logger import Logger, logger
-from lib.options import TrainOptions
 from lib.loss import ComputeLoss
-from test import test
+from lib.general import init
 from torch.optim.lr_scheduler import CosineAnnealingLR
+from test import test
 
 
 def weights_init_normal(m):
@@ -25,14 +25,6 @@ def weights_init_normal(m):
     elif isinstance(m, torch.nn.BatchNorm2d):
         torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
-
-
-def init():
-    random.seed(42)
-    np.random.seed(42)
-    torch.manual_seed(42)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
 
 def fitness(x):
@@ -64,9 +56,9 @@ class Train:
         os.makedirs(self.model_path)
         os.makedirs(os.path.join(self.model_path, "logs"))
 
-    def load_model(self):
+    def load_model(self, n_classes):
         pretrained_dict = torch.load(self.args.weights_path)
-        self.model = Yolo(n_classes=2)
+        self.model = Yolo(n_classes=n_classes)
         self.model = self.model.to(self.device)
         model_dict = self.model.state_dict()
 
@@ -84,14 +76,15 @@ class Train:
         save_folder = os.path.join(self.model_path, "ryolov4_{}.pth".format(postfix))
         torch.save(self.model.state_dict(), save_folder)
 
-    def save_opts(self):
+    def save_opts(self, hyp):
         """Save options to disk so we know what we ran this experiment with
         """
         to_save = self.args.__dict__.copy()
+        to_save.update(hyp)
         with open(os.path.join(self.model_path, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
     
-    def logging_processes(self, loss_items, epoch,mean_recall = None,mean_precision = None ,map50 = None, map5095 = None, val_mode = False)->None:
+    def logging_processes(self, loss_items, epoch,mean_recall=None, mean_precision=None, map50=None, map5095=None, val_mode=False):
         tensorboard_log = {}
         # update in validation 
         if val_mode and map50 != None and map5095 != None:
@@ -110,11 +103,6 @@ class Train:
         self.logger.list_of_scalars_summary(tensorboard_log, epoch)
 
     def train(self):
-        self.check_model_path()
-        self.load_model()
-        self.save_opts()
-        self.logger = Logger(os.path.join(self.model_path, "logs"))
-
         # load data info
         with open(self.args.data, "r") as stream:
             data = yaml.safe_load(stream)
@@ -122,6 +110,11 @@ class Train:
         # load hyperparameters
         with open(self.args.hyp, "r") as stream:
             hyp = yaml.safe_load(stream)
+
+        self.check_model_path()
+        self.load_model(len(data["names"]))
+        self.save_opts(hyp)
+        self.logger = Logger(os.path.join(self.model_path, "logs"))
 
         train_dataset, train_dataloader = load_data(
             data['train'], data['names'], data['type'], hyp, self.args.img_size, self.args.batch_size, augment=True
@@ -198,7 +191,7 @@ class Train:
                 self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65
             )
 
-            self.logging_processes(loss_items, epoch, mean_recall = mr, mean_precision = mp ,map50 = map50, map5095 = map, val_mode = True)
+            self.logging_processes(loss_items, epoch, mean_recall=mr, mean_precision=mp , map50=map50, map5095=map, val_mode=True)
 
             fit = fitness(np.array([mp, mr, map50, map]))
             if fit > best_fitness:
@@ -215,7 +208,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=50, help="number of epochs")
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--batch_size", type=int, default=4, help="size of batches")
-    parser.add_argument("--img_size", type=int, default=416, help="size of each image dimension")
+    parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
     parser.add_argument("--weights_path", type=str, default="weights/pretrained/yolov4.pth", help="path to pretrained weights file")
     parser.add_argument("--model_name", type=str, default="trash", help="new model name")
     parser.add_argument("--data", type=str, default="", help=".yaml path for data")

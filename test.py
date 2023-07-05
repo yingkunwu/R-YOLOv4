@@ -6,7 +6,6 @@ import glob
 import yaml
 import argparse
 
-from lib.options import TestOptions
 from lib.post_process import post_process, skewiou_2
 from lib.load import load_data
 from lib.loss import ComputeLoss
@@ -226,7 +225,7 @@ class Test:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
 
-    def load_model(self):
+    def load_model(self, n_classes):
         model_path = os.path.join("weights", self.args.model_name)
         if os.path.exists(model_path):
             weight_path = glob.glob(os.path.join(model_path, "*.pth"))
@@ -239,13 +238,11 @@ class Test:
         else:
             assert False, "Model is not exist"
         pretrained_dict = torch.load(weight_path, map_location=torch.device('cpu'))
-        self.model = Yolo(n_classes=2)
+        self.model = Yolo(n_classes=n_classes)
         self.model = self.model.to(self.device)
         self.model.load_state_dict(pretrained_dict)
 
     def run(self):
-        self.load_model()
-
         # load hyperparameters
         with open(self.args.hyp, "r") as stream:
             hyp = yaml.safe_load(stream)
@@ -253,6 +250,8 @@ class Test:
         # load data info
         with open(self.args.data, "r") as stream:
             data = yaml.safe_load(stream)
+
+        self.load_model(len(data["names"]))
 
         compute_loss = ComputeLoss(hyp)
 

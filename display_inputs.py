@@ -1,6 +1,3 @@
-import sys
-sys.path.append('../R-YOLOv4')
-
 import cv2 as cv
 import numpy as np
 import os
