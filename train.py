@@ -11,11 +11,11 @@ import argparse
 
 from model.yolo import Yolo
 from lib.load import load_data
-from lib.scheduler import CosineAnnealingWarmupRestarts
+from lib.scheduler import one_cycle
 from lib.logger import Logger, logger
 from lib.loss import ComputeLoss
 from lib.general import init
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import  LambdaLR
 from test import test
 
 
@@ -128,15 +128,11 @@ class Train:
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
 
-        # scheduler = CosineAnnealingWarmupRestarts(optimizer,
-        #                                         first_cycle_steps=round(scheduler_iters),
-        #                                         max_lr=self.args.lr,
-        #                                         min_lr=1e-5,
-        #                                         warmup_steps=round(scheduler_iters * 0.1),
-        #                                         cycle_mult=1,
-        #                                         gamma=1)
-        scheduler = CosineAnnealingLR(optimizer, T_max=scheduler_iters, eta_min=1e-5)
-        
+        nw =  int((self.args.epochs * num_iters_per_epoch) * 0.1)
+        #scheduler = CosineAnnealingLR(optimizer, T_max=scheduler_iters, eta_min=1e-5)
+        lf = one_cycle(1, 0.1, int(self.args.epochs))
+        scheduler = LambdaLR(optimizer, lr_lambda=lf)
+
         compute_loss = ComputeLoss(hyp)
 
         logger.info(f'Image sizes {self.args.img_size}')
@@ -152,7 +148,7 @@ class Train:
             # -------------------
             self.model.train()
       
-            logger.info(('\n' + '%10s' * 7) % ('Epoch', 'last lr', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
+            logger.info(('\n' + '%10s' * 7) % ('Epoch', 'last lr', 'box_loss', 'obj_loss', 'cls_loss', 'acc_loss', 'img_size'))
             pbar = enumerate(train_dataloader)
             pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
             #pbar = enumerate(tqdm.tqdm(train_dataloader))
@@ -160,6 +156,17 @@ class Train:
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
                 targets = targets.to(self.device)
+
+                # warmup
+                if global_step <= nw:
+                    xi = [0, nw]  # x interp
+                    # model.gr = np.interp(ni, xi, [0.0, 1.0])  # iou loss ratio (obj_loss = 1.0 or iou)
+                    subdivisions = max(1, np.interp(global_step, xi, [1, 64/self.args.batch_size]).round())
+
+                    for y, x in enumerate(optimizer.param_groups):
+                        # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
+                        x['lr'] = np.interp(global_step, xi, [0.1 if y == 2 else 0.0, x['initial_lr'] * lf(epoch)])
+
 
                 #outputs, loss, loss_items = self.model(imgs, targets)
                 outputs, masked_anchors = self.model(imgs)
@@ -172,15 +179,16 @@ class Train:
                 if global_step % subdivisions == 0:
                     optimizer.step()
                     optimizer.zero_grad()
-                    scheduler.step()
                 
                 s = ('%10s'  + '%10.4g' * 6) % (
-                    '%g/%g' % (epoch, self.args.epochs),scheduler.get_last_lr()[0],  loss_items["reg_loss"],
+                    '%g/%g' % (epoch, self.args.epochs),optimizer.param_groups[0]["lr"],  loss_items["reg_loss"],
                     loss_items["conf_loss"], loss_items["cls_loss"], total_loss, imgs.shape[-1])
 
                 pbar.set_description(s)
                 pbar.update(0)
-            # update the training log for tensorboard every epoch    
+
+            scheduler.step()  
+            # update the training log for tensorboard every epoch  
             self.logging_processes(loss_items, epoch)
 
             # -------------------
