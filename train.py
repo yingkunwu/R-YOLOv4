@@ -15,7 +15,7 @@ from lib.scheduler import one_cycle
 from lib.logger import Logger, logger
 from lib.loss import ComputeLoss
 from lib.general import init
-from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
+from torch.optim.lr_scheduler import  LambdaLR
 from test import test
 
 
@@ -148,9 +148,10 @@ class Train:
             # -------------------
             self.model.train()
       
-            logger.info(('\n' + '%10s' * 7) % ('Epoch', 'last lr', 'box_loss', 'obj_loss', 'cls_loss', 'total', 'img_size'))
-
-            pbar = enumerate(tqdm.tqdm(train_dataloader))
+            logger.info(('\n' + '%10s' * 7) % ('Epoch', 'last lr', 'box_loss', 'obj_loss', 'cls_loss', 'acc_loss', 'img_size'))
+            pbar = enumerate(train_dataloader)
+            pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
+            #pbar = enumerate(tqdm.tqdm(train_dataloader))
             for batch, (_, imgs, targets) in pbar:
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
@@ -180,13 +181,14 @@ class Train:
                     optimizer.zero_grad()
                 
                 s = ('%10s'  + '%10.4g' * 6) % (
-                    '%g/%g' % (epoch, self.args.epochs),scheduler.get_last_lr()[0],  loss_items["reg_loss"],
+                    '%g/%g' % (epoch, self.args.epochs),optimizer.param_groups[0]["lr"],  loss_items["reg_loss"],
                     loss_items["conf_loss"], loss_items["cls_loss"], total_loss, imgs.shape[-1])
 
                 pbar.set_description(s)
                 pbar.update(0)
-            # update the training log for tensorboard every epoch  
+
             scheduler.step()  
+            # update the training log for tensorboard every epoch  
             self.logging_processes(loss_items, epoch)
 
             # -------------------
