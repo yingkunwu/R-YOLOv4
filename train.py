@@ -128,9 +128,9 @@ class Train:
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
 
-        nw =  int((self.args.epochs * num_iters_per_epoch) * 0.1)
+        nw =  int((self.args.epochs * num_iters_per_epoch) * hyp['warmup_prop'])
         #scheduler = CosineAnnealingLR(optimizer, T_max=scheduler_iters, eta_min=1e-5)
-        lf = one_cycle(1, 0.1, int(self.args.epochs))
+        lf = one_cycle(1, hyp['lrf'], int(self.args.epochs))
         scheduler = LambdaLR(optimizer, lr_lambda=lf)
 
         compute_loss = ComputeLoss(hyp)
@@ -165,7 +165,7 @@ class Train:
 
                     for y, x in enumerate(optimizer.param_groups):
                         # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                        x['lr'] = np.interp(global_step, xi, [0.1 if y == 2 else 0.0, x['initial_lr'] * lf(epoch)])
+                        x['lr'] = np.interp(global_step, xi, [hyp['warmup_bias_lr'] if y == 2 else 0.0, x['initial_lr'] * lf(epoch)])
 
 
                 #outputs, loss, loss_items = self.model(imgs, targets)

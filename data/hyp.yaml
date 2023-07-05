@@ -14,3 +14,9 @@ flipud: 0.5  # image flip up-down (probability)
 fliplr: 0.5  # image flip left-right (probability)
 mosaic: 1.0  # image mosaic (probability)
 mixup: 0.15  # image mixup (probability)
+
+#For scheduler
+#lr0: 0.001  # initial learning rate (SGD=1E-2, Adam=1E-3)
+lrf: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
+warmup_bias_lr: 0.1  # warmup initial bias lr
+warmup_prop: 0.1 # the warmup propotion wrt whole dataset
