@@ -79,8 +79,8 @@ class Train:
         self.model.apply(weights_init_normal)  # 權重初始化
         self.model.load_state_dict(model_dict)
 
-    def save_model(self, postfix):
-        save_folder = os.path.join(self.model_path, "ryolov4_{}.pth".format(postfix))
+    def save_model(self, weightname):
+        save_folder = os.path.join(self.model_path, "{}.pth".format(weightname))
         torch.save(self.model.state_dict(), save_folder)
 
     def save_opts(self, hyp):
@@ -217,7 +217,7 @@ class Train:
         
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epochs", type=int, default=50, help="number of epochs")
+    parser.add_argument("--epochs", type=int, default=80, help="number of epochs")
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--batch_size", type=int, default=4, help="size of batches")
     parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
