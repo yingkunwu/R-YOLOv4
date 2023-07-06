@@ -176,7 +176,6 @@ def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thre
     iouv = np.linspace(0.5, 0.95, 10) # iou vector for mAP@0.5:0.95
     niou = np.size(iouv)
     seen = 0
-    total_loss = 0
     total_loss_items = {}
 
     for i, (_, imgs, targets) in enumerate(tqdm.tqdm(test_dataloader)):
@@ -186,10 +185,8 @@ def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thre
 
         with torch.no_grad():
             outputs, masked_anchors = model(imgs)
-            loss, loss_items = compute_loss(outputs, targets, masked_anchors)
+            _, loss_items = compute_loss(outputs, targets, masked_anchors)
             outputs = post_process(outputs, imgs.shape[2], conf_thres=conf_thres, nms_thres=nms_thres)
-
-            total_loss += loss.detach().item()
 
             for item in loss_items:
                 if item in total_loss_items:
@@ -216,7 +213,11 @@ def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thre
     for i, c in enumerate(ap_class):
         logger.info(pf % (data['names'][c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
 
-    return mp, mr, map50, map, total_loss, total_loss_items
+    # average losses
+    for item in total_loss_items:
+        total_loss_items[item] /= len(test_dataloader)
+
+    return mp, mr, map50, map, total_loss_items
 
 
 class Test:
