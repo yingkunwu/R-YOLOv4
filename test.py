@@ -182,7 +182,7 @@ def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thre
     for i, (_, imgs, targets) in enumerate(tqdm.tqdm(test_dataloader)):
         imgs = imgs.to(device)
         targets = targets.to(device)
-        seen += 1
+        seen += len(imgs)
 
         with torch.no_grad():
             outputs, masked_anchors = model(imgs)
