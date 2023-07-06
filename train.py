@@ -154,7 +154,7 @@ class Train:
             self.model.train()
             total_train_loss = {}
       
-            logger.info(('\n' + '%10s' * 7) % ('Epoch', 'lr', 'box_loss', 'obj_loss', 'cls_loss', 'acc_loss', 'img_size'))
+            logger.info(('\n' + '%10s' * 6) % ('Epoch', 'lr', 'box_loss', 'obj_loss', 'cls_loss', 'total'))
             pbar = enumerate(train_dataloader)
             pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
             for batch, (_, imgs, targets) in pbar:
@@ -178,9 +178,9 @@ class Train:
                     optimizer.zero_grad()
                 
                 # print info
-                s = ('%10s'  + '%10.4g' * 6) % (
+                s = ('%10s'  + '%10.4g' * 5) % (
                     '%g/%g' % (epoch, self.args.epochs), optimizer.param_groups[0]["lr"], loss_items["reg_loss"],
-                    loss_items["conf_loss"], loss_items["cls_loss"], loss_items["loss"], imgs.shape[-1])
+                    loss_items["conf_loss"], loss_items["cls_loss"], loss_items["loss"])
                 # store loss items
                 for item in loss_items:
                     if item in total_train_loss:
@@ -194,9 +194,6 @@ class Train:
             lr = optimizer.param_groups[0]["lr"] # for tensorboard
             scheduler.step()
 
-            # update the training log for tensorboard every epoch  
-            self.logging_processes(loss_items, epoch)
-
             # -------------------
             # ------ Valid ------
             # -------------------
@@ -205,6 +202,7 @@ class Train:
                 self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65
             )
 
+            # update logging info for tensorboard every epoch  
             self.logging_processes(epoch, total_train_loss, total_val_loss, mr, mp , map50, map5095, lr)
 
             fit = fitness(np.array([mp, mr, map50, map5095]))
