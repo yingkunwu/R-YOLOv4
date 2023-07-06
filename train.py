@@ -14,9 +14,16 @@ from lib.load import load_data
 from lib.scheduler import one_cycle
 from lib.logger import Logger, logger
 from lib.loss import ComputeLoss
-from lib.general import init
 from torch.optim.lr_scheduler import  LambdaLR
 from test import test
+
+
+def init():
+    random.seed(42)
+    np.random.seed(42)
+    torch.manual_seed(42)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
 def weights_init_normal(m):
@@ -84,21 +91,23 @@ class Train:
         with open(os.path.join(self.model_path, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
     
-    def logging_processes(self, loss_items, epoch,mean_recall=None, mean_precision=None, map50=None, map5095=None, val_mode=False):
+    def logging_processes(self, epoch, total_train_loss, total_val_loss, mr, mp , map50, map5095, lr):
         tensorboard_log = {}
-        # update in validation 
-        if val_mode and map50 != None and map5095 != None:
-            for name, metric in loss_items.items():
-                tensorboard_log[f"val/{name}"] = metric
+        
+        # log training loss
+        for name, loss in total_train_loss.items():
+            tensorboard_log[f"train/{name}"] = loss
 
-            tensorboard_log["mean recall"] = mean_recall
-            tensorboard_log["mean precision"] = mean_precision
-            tensorboard_log["mAP@.5"] = map50
-            tensorboard_log["mAP@.5:.95"] = map5095
-        # update in training 
-        else:
-            for name, metric in loss_items.items():
-                tensorboard_log[f"train/{name}"] = metric
+        # log validation loss
+        for name, loss in total_val_loss.items():
+            tensorboard_log[f"val/{name}"] = loss
+
+        # log metrics
+        tensorboard_log["mean recall"] = mr
+        tensorboard_log["mean precision"] = mp
+        tensorboard_log["mAP@.5"] = map50
+        tensorboard_log["mAP@.5:.95"] = map5095
+        tensorboard_log["lr"] = lr
 
         self.logger.list_of_scalars_summary(tensorboard_log, epoch)
 
@@ -121,25 +130,21 @@ class Train:
         )
         num_iters_per_epoch = len(train_dataloader)
 
-        subdivisions = 64
-
-        scheduler_iters = round(self.args.epochs * len(train_dataloader) / subdivisions)
-        total_step = num_iters_per_epoch * self.args.epochs
+        nbs = 64  # nominal batch size
+        accumulate = max(round(nbs / self.args.batch_size), 1)  # accumulate loss before optimizing
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
 
-        nw =  int((self.args.epochs * num_iters_per_epoch) * hyp['warmup_prop'])
-        #scheduler = CosineAnnealingLR(optimizer, T_max=scheduler_iters, eta_min=1e-5)
+        nw =  max(int((self.args.epochs * num_iters_per_epoch) * hyp['warmup_prop']), 1000)
         lf = one_cycle(1, hyp['lrf'], int(self.args.epochs))
         scheduler = LambdaLR(optimizer, lr_lambda=lf)
+        initial_lr = optimizer.param_groups[0]['initial_lr']
 
         compute_loss = ComputeLoss(hyp)
 
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
         
-
-        start_time = time.time()
         best_fitness = 0
 
         for epoch in range(self.args.epochs):
@@ -147,11 +152,11 @@ class Train:
             # ------ Train ------
             # -------------------
             self.model.train()
+            total_train_loss = {}
       
-            logger.info(('\n' + '%10s' * 7) % ('Epoch', 'last lr', 'box_loss', 'obj_loss', 'cls_loss', 'acc_loss', 'img_size'))
+            logger.info(('\n' + '%10s' * 7) % ('Epoch', 'lr', 'box_loss', 'obj_loss', 'cls_loss', 'acc_loss', 'img_size'))
             pbar = enumerate(train_dataloader)
             pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
-            #pbar = enumerate(tqdm.tqdm(train_dataloader))
             for batch, (_, imgs, targets) in pbar:
                 global_step = num_iters_per_epoch * epoch + batch + 1
                 imgs = imgs.to(self.device)
@@ -160,48 +165,49 @@ class Train:
                 # warmup
                 if global_step <= nw:
                     xi = [0, nw]  # x interp
-                    # model.gr = np.interp(ni, xi, [0.0, 1.0])  # iou loss ratio (obj_loss = 1.0 or iou)
-                    subdivisions = max(1, np.interp(global_step, xi, [1, 64/self.args.batch_size]).round())
+                    accumulate = max(1, np.interp(global_step, xi, [1, nbs / self.args.batch_size]).round())
+                    optimizer.param_groups[0]['lr'] = np.interp(global_step, xi, [0.0, initial_lr * lf(epoch)])
 
-                    for y, x in enumerate(optimizer.param_groups):
-                        # bias lr falls from 0.1 to lr0, all other lrs rise from 0.0 to lr0
-                        x['lr'] = np.interp(global_step, xi, [hyp['warmup_bias_lr'] if y == 2 else 0.0, x['initial_lr'] * lf(epoch)])
-
-
-                #outputs, loss, loss_items = self.model(imgs, targets)
                 outputs, masked_anchors = self.model(imgs)
                 loss, loss_items = compute_loss(outputs, targets, masked_anchors)
 
                 loss.backward()
-                total_loss = loss.detach().item()
 
-                # TODO: make sure weight updating process
-                if global_step % subdivisions == 0:
+                if global_step % accumulate == 0:
                     optimizer.step()
                     optimizer.zero_grad()
                 
+                # print info
                 s = ('%10s'  + '%10.4g' * 6) % (
-                    '%g/%g' % (epoch, self.args.epochs),optimizer.param_groups[0]["lr"],  loss_items["reg_loss"],
-                    loss_items["conf_loss"], loss_items["cls_loss"], total_loss, imgs.shape[-1])
+                    '%g/%g' % (epoch, self.args.epochs), optimizer.param_groups[0]["lr"], loss_items["reg_loss"],
+                    loss_items["conf_loss"], loss_items["cls_loss"], loss_items["loss"], imgs.shape[-1])
+                # store loss items
+                for item in loss_items:
+                    if item in total_train_loss:
+                        total_train_loss[item] += loss_items[item]
+                    else:
+                        total_train_loss[item] = loss_items[item]
 
                 pbar.set_description(s)
                 pbar.update(0)
 
-            scheduler.step()  
+            lr = optimizer.param_groups[0]["lr"] # for tensorboard
+            scheduler.step()
+
             # update the training log for tensorboard every epoch  
             self.logging_processes(loss_items, epoch)
 
             # -------------------
             # ------ Valid ------
             # -------------------
-            mp, mr, map50, map, loss, loss_items = test(
+            mp, mr, map50, map5095, loss, total_val_loss = test(
                 self.model, compute_loss, self.device, data, hyp, 
                 self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65
             )
 
-            self.logging_processes(loss_items, epoch, mean_recall=mr, mean_precision=mp , map50=map50, map5095=map, val_mode=True)
+            self.logging_processes(epoch, total_train_loss, total_val_loss, mr, mp , map50, map5095, lr)
 
-            fit = fitness(np.array([mp, mr, map50, map]))
+            fit = fitness(np.array([mp, mr, map50, map5095]))
             if fit > best_fitness:
                 best_fitness = fit
                 self.save_model("best")
