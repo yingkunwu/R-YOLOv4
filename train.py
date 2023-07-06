@@ -103,10 +103,10 @@ class Train:
             tensorboard_log[f"val/{name}"] = loss
 
         # log metrics
-        tensorboard_log["mean recall"] = mr
-        tensorboard_log["mean precision"] = mp
-        tensorboard_log["mAP@.5"] = map50
-        tensorboard_log["mAP@.5:.95"] = map5095
+        tensorboard_log["metrics/mean recall"] = mr
+        tensorboard_log["metrics/mean precision"] = mp
+        tensorboard_log["metrics/mAP@.5"] = map50
+        tensorboard_log["metrics/mAP@.5:.95"] = map5095
         tensorboard_log["lr"] = lr
 
         self.logger.list_of_scalars_summary(tensorboard_log, epoch)
@@ -179,8 +179,8 @@ class Train:
                 
                 # print info
                 s = ('%10s'  + '%10.4g' * 5) % (
-                    '%g/%g' % (epoch, self.args.epochs), optimizer.param_groups[0]["lr"], loss_items["reg_loss"],
-                    loss_items["conf_loss"], loss_items["cls_loss"], loss_items["loss"])
+                    '%g/%g' % (epoch + 1, self.args.epochs), optimizer.param_groups[0]["lr"], loss_items["reg_loss"],
+                    loss_items["conf_loss"], loss_items["cls_loss"], loss_items["total_loss"])
                 # store loss items
                 for item in loss_items:
                     if item in total_train_loss:
@@ -197,10 +197,14 @@ class Train:
             # -------------------
             # ------ Valid ------
             # -------------------
-            mp, mr, map50, map5095, loss, total_val_loss = test(
+            mp, mr, map50, map5095, total_val_loss = test(
                 self.model, compute_loss, self.device, data, hyp, 
                 self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65
             )
+
+            # average losses
+            for item in total_train_loss:
+                total_train_loss[item] /= len(train_dataloader)
 
             # update logging info for tensorboard every epoch  
             self.logging_processes(epoch, total_train_loss, total_val_loss, mr, mp , map50, map5095, lr)

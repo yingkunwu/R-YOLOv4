@@ -170,7 +170,7 @@ class ComputeLoss:
         # -   Logging Info   -
         # --------------------
         loss_items = {
-            "loss": loss.detach().cpu().item(),
+            "total_loss": loss.detach().cpu().item(),
             "reg_loss": reg_loss.detach().cpu().item(),
             "conf_loss": conf_loss.detach().cpu().item(),
             "cls_loss": cls_loss.detach().cpu().item()
