@@ -21,24 +21,16 @@ class Detect:
         self.model = None
 
     def load_model(self, n_classes):
-        model_path = os.path.join("weights", self.args.model_name)
-        if os.path.exists(model_path):
-            weight_path = glob.glob(os.path.join(model_path, "*.pth"))
-            if len(weight_path) == 0:
-                assert False, "Model weight not found"
-            elif len(weight_path) > 1:
-                assert False, "Multiple weights are found. Please keep only one weight in your model directory"
-            else:
-                weight_path = weight_path[0]
-        else:
-            assert False, "Model is not exist"
-        pretrained_dict = torch.load(weight_path, map_location=self.device)
+        if not os.path.isfile(self.args.weight_path):
+            logger.error("Model weight not found.")
+            exit(1)
+        pretrained_dict = torch.load(self.args.weight_path, map_location=self.device)
         self.model = Yolo(n_classes=n_classes)
         self.model = self.model.to(self.device)
         self.model.load_state_dict(pretrained_dict)
 
     def save_results(self, imgs, boxes, class_names):
-        save_folder = os.path.join("outputs", self.args.model_name)
+        save_folder = os.path.join("outputs", "inference")
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
         for i, (img_path, box) in enumerate(zip(imgs, boxes)):
@@ -89,12 +81,12 @@ class Detect:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data", type=str, default="", help=".yaml path for data")
-    parser.add_argument("--model_name", type=str, default="UCAS_AOD", help="model name")
+    parser.add_argument("--weight_path", type=str, default="", help="file path to load model weight")
     parser.add_argument("--conf_thres", type=float, default=0.7, help="object confidence threshold")
     parser.add_argument("--nms_thres", type=float, default=0.2, help="iou thresshold for non-maximum suppression")
     parser.add_argument("--batch_size", type=int, default=8, help="size of the batches")
     parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
+    parser.add_argument("--data", type=str, default="", help=".yaml path for data")
     parser.add_argument("--ext", type=str, default="png", choices=["png", "jpg"], help="Image file format")
     args = parser.parse_args()
     print(args)
