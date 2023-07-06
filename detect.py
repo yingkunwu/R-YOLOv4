@@ -7,7 +7,6 @@ import argparse
 import cv2 as cv
 import numpy as np
 
-from lib.options import DetectOptions
 from lib.plot import plot_boxes
 from lib.post_process import post_process
 from datasets.base_dataset import ImageDataset

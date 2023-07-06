@@ -3,7 +3,14 @@ import cv2 as cv
 import numpy as np
 from shapely.geometry import Polygon
 
-from lib.general import xywh2xyxy
+
+def xywh2xyxy(x):
+    y = x.new(x.shape)
+    y[..., 0] = x[..., 0] - x[..., 2] / 2
+    y[..., 1] = x[..., 1] - x[..., 3] / 2
+    y[..., 2] = x[..., 0] + x[..., 2] / 2
+    y[..., 3] = x[..., 1] + x[..., 3] / 2
+    return y
 
 
 def iou(box1, box2, nms_thres):

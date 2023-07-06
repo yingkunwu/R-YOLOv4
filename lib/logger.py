@@ -17,7 +17,7 @@ class Logger(object):
 def setup_logger(log_file_path: str = None):
     """Return a logger with a default ColoredFormatter."""
     formatter = ColoredFormatter(
-        "%(asctime)s %(log_color)s%(levelname)-8s %(filename)s[line:%(lineno)d]: %(message)s",
+        "%(asctime)s %(log_color)s%(levelname)-8s %(message)s",
         datefmt='%Y-%m-%d %H:%M:%S',
         reset=True,
         log_colors={

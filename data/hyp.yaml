@@ -1,9 +1,11 @@
+# For training
 fl_gamma: 2.0  # focal loss gamma (efficientDet default gamma=1.5)
 ignore_thresh: 0.6 # threshold to ignore training negative samples
 box: 1.0  # box loss gain
 obj: 10.0  # obj loss gain (scale with pixels)
 cls: 1.0  # cls loss gain
 
+# For augmentation
 hsv_h: 0.015  # image HSV-Hue augmentation (fraction)
 hsv_s: 0.7  # image HSV-Saturation augmentation (fraction)
 hsv_v: 0.4  # image HSV-Value augmentation (fraction)
@@ -15,8 +17,6 @@ fliplr: 0.5  # image flip left-right (probability)
 mosaic: 1.0  # image mosaic (probability)
 mixup: 0.15  # image mixup (probability)
 
-#For scheduler
-#lr0: 0.001  # initial learning rate (SGD=1E-2, Adam=1E-3)
-lrf: 0.1  # final OneCycleLR learning rate (lr0 * lrf)
-warmup_bias_lr: 0.1  # warmup initial bias lr
-warmup_prop: 0.1 # the warmup propotion wrt whole dataset
+# For scheduler
+lrf: 0.1  # final OneCycleLR learning rate (lr * lrf)
+warmup_prop: 0.05  # the warmup propotion wrt whole dataset
