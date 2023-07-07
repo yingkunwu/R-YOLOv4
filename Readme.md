@@ -1,7 +1,5 @@
 # R-YOLOv4
 
-**This project is derived from my undergraduate research in NCKU : Intelligent Recycling Machine**
-
 ### Introduction
 The objective of this project is to adapt YOLOv4 model to detecting oriented objects. As a result, modifying the original loss function of the model is required. I got a successful result by increasing the number of anchor boxes with different rotating angle and combining smooth-L1-IoU loss function proposed by [R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object](https://arxiv.org/abs/1908.05612) into the original loss for bounding boxes.
 
@@ -14,20 +12,8 @@ The objective of this project is to adapt YOLOv4 model to detecting oriented obj
 <img src="https://i.imgur.com/Qi1XFXS.png" alt="angle" height="70"/>
 
 ---
-#### Scheduler
-Cosine Annealing with Warmup (Reference: [Cosine Annealing with Warmup for PyTorch](https://github.com/katsura-jp/pytorch-cosine-annealing-with-warmup))
-</br>
-<img src="https://i.imgur.com/qvTnszY.png" alt="scheduler" height="300"/>
 
----
-
-#### Recall
-<img src="https://i.imgur.com/mQf4S1m.png" alt="recall" height="300"/>
-As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1**. Therefore I used it for my loss function.
-
----
-
-### Usage
+### Setup
 
 1. Clone and Setup Environment
     ```
@@ -78,12 +64,14 @@ As the paper suggested, I get a better results from **f(ariou) = exp(1-ariou)-1*
             └── detect/
                 └── ...png
     ```
-4. Train, Test, and Detect</br>
-    Please refer to `lib/options.py` to check out all the arguments.
     
 ### Train
 
 I have implemented methods to load and train three different datasets. They are UCAS-AOD, DOTA, and custom dataset respectively. You can check out how I loaded those dataset into the model at [/datasets](https://github.com/kunnnnethan/R-YOLOv4/tree/main/datasets). The angle of each bounding box is limited in `(- pi/2,  pi/2]`, and the height of each bounding box is always longer than it's width.
+
+```
+$ python train.py --data data/UCAS_AOD.yaml --hyp data/hyp.yaml --model_name ryolov4 --batch_size 16 --img_size 608
+```
 
 You can run [display_inputs.py](https://github.com/kunnnnethan/R-YOLOv4/blob/main/display_inputs.py) to visualize whether your data is loaded successfully.
 
@@ -91,19 +79,11 @@ You can run [display_inputs.py](https://github.com/kunnnnethan/R-YOLOv4/blob/mai
 
 Please refer to [this repository](https://github.com/kunnnnethan/UCAS-AOD-benchmark) to rearrange files so that it can be loaded and trained by this model.</br>
 You can download the [weight](https://drive.google.com/uc?export=download&id=1h-OKkkPAxPS9PvMjOU03T6KZdHUaDY5G) that I trained from UCAS-AOD.
-```
-While training, please specify which dataset you are using.
-$ python train.py --dataset UCAS_AOD
-```
 
 #### DOTA dataset
 
 Download the official dataset from [here](https://captain-whu.github.io/DOTA/dataset.html). The original files should be able to be loaded and trained by this model.</br>
 You can download the [weight](https://drive.google.com/uc?export=download&id=19xET9cnpPbp5fvSkLY4NiUvKGQNyVPiB) that I trained from DOTA.
-```
-While training, please specify which dataset you are using.
-$ python train.py --dataset DOTA
-```
 
 #### Train with custom dataset
 1. Use [labelImg2](https://github.com/chinakook/labelImg2) to help label your data. labelImg2 is capable of labeling rotated objects.
@@ -115,29 +95,22 @@ $ python train.py --dataset DOTA
     ```python xml2txt.py --data_folder your-path --action del_xml```
 
 A [trash](https://drive.google.com/uc?export=download&id=1YBDtCoRXEVkPQUUcfoChWKq8WVzm7IF-) custom dataset that I made and the [weight](https://drive.google.com/uc?export=download&id=1UpiBurcQr52ZDSjZZDzO6XsUzkWEwJ__) trained from it are provided for your convenience.
+
+### Test
 ```
-While training, please specify which dataset you are using.
-$ python train.py --dataset custom
+python test.py --data data/UCAS_AOD.yaml --hyp data/hyp.yaml --weight_path weights/ryolov4/best.pth --batch_size 8 --img_size 608
 ```
 
-#### Training Log
+### detect
 ```
----- [Epoch 2/2] ----
-+---------------+--------------------+---------------------+---------------------+----------------------+
-| Step: 596/600 | loss               | reg_loss            | conf_loss           | cls_loss             |
-+---------------+--------------------+---------------------+---------------------+----------------------+
-| YoloLayer1    | 0.4302629232406616 | 0.32991039752960205 | 0.09135108441114426 | 0.009001442231237888 |
-| YoloLayer2    | 0.7385762333869934 | 0.5682911276817322  | 0.15651139616966248 | 0.013773750513792038 |
-| YoloLayer3    | 1.5002599954605103 | 1.1116538047790527  | 0.36262497305870056 | 0.025981156155467033 |
-+---------------+--------------------+---------------------+---------------------+----------------------+
-Total Loss: 2.669099, Runtime: 404.888372
+python detect.py --data data/UCAS_AOD.yaml --weight_path weights/ryolov4/best.pth --batch_size 8 --img_size 608
 ```
 
 #### Tensorboard
 If you would like to use tensorboard for tracking traing process.
 
 * Open additional terminal in the same folder where you are running program.
-* Run command ```$ tensorboard --logdir='weights/your_model_name/logs' --port=6006``` 
+* Run command ```$ tensorboard --logdir='weights/your_model_name' --port=6006``` 
 * Go to [http://localhost:6006/]( http://localhost:6006/)
 
 ### Results
@@ -166,25 +139,15 @@ DOTA have not been tested yet. (It's quite difficult to test because of large re
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/trash/540.jpg" alt="garbage2" height="410"/>
 
 
-### TODO
-
-- [x] Mosaic Augmentation
-- [x] Mixup Augmentation
-
-
 ### References
 
+[WongKinYiu/yolov7](https://github.com/WongKinYiu/yolov7/tree/main)</br>
+[ultralytics/yolov5](https://github.com/ultralytics/yolov5/tree/master/utils)</br>
+[Tianxiaomo/pytorch-YOLOv4](https://github.com/Tianxiaomo/pytorch-YOLOv4)</br>
 [yangxue0827/RotationDetection](https://github.com/yangxue0827/RotationDetection)</br>
 [eriklindernoren/PyTorch-YOLOv3](https://github.com/eriklindernoren/PyTorch-YOLOv3)</br>
-[Tianxiaomo/pytorch-YOLOv4](https://github.com/Tianxiaomo/pytorch-YOLOv4)</br>
-[ultralytics/yolov5](https://github.com/ultralytics/yolov5/tree/master/utils)
 
 **YOLOv4: Optimal Speed and Accuracy of Object Detection**
-
-*Alexey Bochkovskiy, Chien-Yao Wang, Hong-Yuan Mark Liao*
-
-**Abstract**
-There are a huge number of features which are said to improve Convolutional Neural Network (CNN) accuracy. Practical testing of combinations of such features on large datasets, and theoretical justification of the result, is required. Some features operate on certain models exclusively and for certain problems exclusively, or only for small-scale datasets; while some features, such as batch-normalization and residual-connections, are applicable to the majority of models, tasks, and datasets...
 
 ```
 @article{yolov4,
@@ -196,11 +159,6 @@ There are a huge number of features which are said to improve Convolutional Neur
 ```
 
 **R3Det: Refined Single-Stage Detector with Feature Refinement for Rotating Object**
-
-*Xue Yang, Junchi Yan, Ziming Feng, Tao He*
-
-**Abstract**
-Rotation detection is a challenging task due to the difficulties of locating the multi-angle objects and separating them effectively from the background. Though considerable progress has been made, for practical settings, there still exist challenges for rotating objects with large aspect ratio, dense distribution and category extremely imbalance. In this paper, we propose an end-to-end refined single-stage rotation detector for fast and accurate object detection by using a progressive regression approach from coarse to fine granularity...
 
 ```
 @article{r3det,
