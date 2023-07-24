@@ -28,8 +28,8 @@ class Yolo(nn.Module):
         x20, x13, x6 = self.neck(d5, d4, d3, inference)
         x2, x10, x18 = self.head(x20, x13, x6)
 
-        out1, mask1 = self.yolo1(x2)
-        out2, mask2 = self.yolo2(x10)
-        out3, mask3 = self.yolo3(x18)
+        out1, mask1, a1 = self.yolo1(x2)
+        out2, mask2, a2 = self.yolo2(x10)
+        out3, mask3, a3 = self.yolo3(x18)
 
-        return [out1, out2, out3], [mask1, mask2, mask3]
+        return [out1, out2, out3], [mask1, mask2, mask3], [a1, a2, a3]

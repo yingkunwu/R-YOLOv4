@@ -168,7 +168,7 @@ class Train:
                     accumulate = max(1, np.interp(global_step, xi, [1, nbs / self.args.batch_size]).round())
                     optimizer.param_groups[0]['lr'] = np.interp(global_step, xi, [0.0, initial_lr * lf(epoch)])
 
-                outputs, masked_anchors = self.model(imgs)
+                outputs, masked_anchors, anchor_a = self.model(imgs)
                 loss, loss_items = compute_loss(outputs, targets, masked_anchors)
 
                 loss.backward()

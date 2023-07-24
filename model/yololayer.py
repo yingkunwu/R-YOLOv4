@@ -67,7 +67,7 @@ class YoloLayer(nn.Module):
         pred_boxes[..., 1] = (pred_y + grid_y)
         pred_boxes[..., 2] = (torch.exp(pred_w) * anchor_w)
         pred_boxes[..., 3] = (torch.exp(pred_h) * anchor_h)
-        pred_boxes[..., 4] = pred_a + anchor_a
+        pred_boxes[..., 4] = pred_a
 
         output = torch.cat(
             (
@@ -79,4 +79,4 @@ class YoloLayer(nn.Module):
             -1,
         )
 
-        return output, masked_anchors
+        return output, masked_anchors, anchor_a
