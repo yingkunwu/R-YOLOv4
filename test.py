@@ -184,9 +184,9 @@ def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thre
         seen += len(imgs)
 
         with torch.no_grad():
-            outputs, masked_anchors, anchor_a = model(imgs)
-            _, loss_items = compute_loss(outputs, targets, masked_anchors)
-            outputs = post_process(outputs, anchor_a, imgs.shape[2], conf_thres=conf_thres, nms_thres=nms_thres)
+            outputs, train_outputs = model(imgs, training=False)
+            _, loss_items = compute_loss(train_outputs, targets)
+            outputs = post_process(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
 
             for item in loss_items:
                 if item in total_loss_items:
@@ -246,7 +246,7 @@ class Test:
 
         self.load_model(len(data["names"]))
 
-        compute_loss = ComputeLoss(hyp)
+        compute_loss = ComputeLoss(self.model, hyp)
 
         test(self.model, compute_loss, self.device, data, hyp, 
                 self.args.img_size, self.args.batch_size, self.args.conf_thres, self.args.nms_thres)

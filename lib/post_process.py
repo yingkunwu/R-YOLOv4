@@ -86,7 +86,7 @@ def skewiou_2(box1, box2):
     return iou
 
 
-def post_process(predictions, anchor_a, img_size, conf_thres=0.5, nms_thres=0.4):
+def post_process(predictions, conf_thres=0.5, nms_thres=0.4):
     """
     Args:
         predictions: size-> [batch, ((grid x grid) + (grid x grid) + (grid x grid)) x num_anchors, 8]
@@ -96,16 +96,6 @@ def post_process(predictions, anchor_a, img_size, conf_thres=0.5, nms_thres=0.4)
         (x1, y1, x2, y2, object_conf, class_score, class_pred)
     """
     batch_size = predictions[0].size(0)
-    pred_dim = predictions[0].size(-1) - 1
-    predictions_ = []
-    for pred, a in zip(predictions, anchor_a):
-        #print(pred.size())
-        pred[..., :4] = pred[..., :4] * (img_size / pred.size(2))
-        pred[..., 4] = pred[..., 4] + a
-        pred = torch.cat((pred[..., :5], pred[..., 6:]), -1)
-        predictions_.append(pred.view(batch_size, -1, pred_dim))
-    predictions = torch.cat(predictions_, 1)
-    
     output = [[] for _ in range(batch_size)]
 
     # Settings

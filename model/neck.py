@@ -5,7 +5,7 @@ class Upsample(nn.Module):
     def __init__(self):
         super(Upsample, self).__init__()
 
-    def forward(self, x, target_size, inference):
+    def forward(self, x, target_size, inference=False):
         assert (x.data.dim() == 4)
         _, _, tw, th = target_size
 
@@ -56,7 +56,7 @@ class Neck(nn.Module):
         self.conv19 = Conv(128, 256, 3, 1, 'leaky')
         self.conv20 = Conv(256, 128, 1, 1, 'leaky')
 
-    def forward(self, input, downsample4, downsample3, inference):
+    def forward(self, input, downsample4, downsample3):
         x1 = self.conv1(input)
         x2 = self.conv2(x1)
         x3 = self.conv3(x2)
@@ -74,7 +74,7 @@ class Neck(nn.Module):
         x6 = self.conv6(x5)
         x7 = self.conv7(x6)
         # UP
-        up = self.upsample1(x7, downsample4.size(), inference)
+        up = self.upsample1(x7, downsample4.size())
         # R 85
         x8 = self.conv8(downsample4)
         # R -1 -3
@@ -88,7 +88,7 @@ class Neck(nn.Module):
         x14 = self.conv14(x13)
 
         # UP
-        up = self.upsample2(x14, downsample3.size(), inference)
+        up = self.upsample2(x14, downsample3.size())
         # R 54
         x15 = self.conv15(downsample3)
         # R -1 -3

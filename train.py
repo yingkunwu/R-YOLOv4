@@ -63,9 +63,9 @@ class Train:
         os.makedirs(self.model_path)
         os.makedirs(os.path.join(self.model_path, "logs"))
 
-    def load_model(self, n_classes):
+    def load_model(self, n_classes, model_config):
         pretrained_dict = torch.load(self.args.weights_path)
-        self.model = Yolo(n_classes=n_classes)
+        self.model = Yolo(n_classes, model_config)
         self.model = self.model.to(self.device)
         model_dict = self.model.state_dict()
 
@@ -83,11 +83,11 @@ class Train:
         save_folder = os.path.join(self.model_path, "{}.pth".format(weightname))
         torch.save(self.model.state_dict(), save_folder)
 
-    def save_opts(self, hyp):
+    def save_opts(self, config):
         """Save options to disk so we know what we ran this experiment with
         """
         to_save = self.args.__dict__.copy()
-        to_save.update(hyp)
+        to_save.update(config)
         with open(os.path.join(self.model_path, 'opt.json'), 'w') as f:
             json.dump(to_save, f, indent=2)
     
@@ -116,13 +116,14 @@ class Train:
         with open(self.args.data, "r") as stream:
             data = yaml.safe_load(stream)
 
-        # load hyperparameters
-        with open(self.args.hyp, "r") as stream:
-            hyp = yaml.safe_load(stream)
+        # load configs
+        with open(self.args.config, "r") as stream:
+            config = yaml.safe_load(stream)
+        hyp = config['hyp']
 
         self.check_model_path()
-        self.load_model(len(data["names"]))
-        self.save_opts(hyp)
+        self.load_model(len(data["names"]), config['model'])
+        self.save_opts(config)
         self.logger = Logger(os.path.join(self.model_path, "logs"))
 
         train_dataset, train_dataloader = load_data(
@@ -140,7 +141,7 @@ class Train:
         scheduler = LambdaLR(optimizer, lr_lambda=lf)
         initial_lr = optimizer.param_groups[0]['initial_lr']
 
-        compute_loss = ComputeLoss(hyp)
+        compute_loss = ComputeLoss(self.model, hyp)
 
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
@@ -168,8 +169,8 @@ class Train:
                     accumulate = max(1, np.interp(global_step, xi, [1, nbs / self.args.batch_size]).round())
                     optimizer.param_groups[0]['lr'] = np.interp(global_step, xi, [0.0, initial_lr * lf(epoch)])
 
-                outputs, masked_anchors, anchor_a = self.model(imgs)
-                loss, loss_items = compute_loss(outputs, targets, masked_anchors)
+                outputs = self.model(imgs, training=True)
+                loss, loss_items = compute_loss(outputs, targets)
 
                 loss.backward()
 
@@ -225,10 +226,10 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--batch_size", type=int, default=4, help="size of batches")
     parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
-    parser.add_argument("--weights_path", type=str, default="weights/pretrained/yolov4.pth", help="path to pretrained weights file")
+    parser.add_argument("--weights_path", type=str, default="weights/yolov4.pth", help="path to pretrained weights file")
     parser.add_argument("--model_name", type=str, default="trash", help="new model name")
     parser.add_argument("--data", type=str, default="", help=".yaml path for data")
-    parser.add_argument("--hyp", type=str, default="", help=".yaml path for hyperparameters")
+    parser.add_argument("--config", type=str, default="", help=".yaml path for configs")
 
     args = parser.parse_args()
     print(args)
