@@ -123,7 +123,7 @@ def post_process(predictions, conf_thres=0.5, iou_thres=0.4):
         c = dets[:, -1:] * max_wh  # classes
         rboxes = dets[:, :5].clone() 
         rboxes[:, :2] = rboxes[:, :2] + c # rboxes (offset by class)
-        rboxes[:, 4] = rboxes[:, 4] * 180 / np.pi # convert radians to degrees
+        rboxes[:, 4] = rboxes[:, 4] / np.pi * 180 # convert radians to degrees
         scores = dets[:, 5]  # scores
 
         i = nms_rotated(rboxes, scores, iou_thres)

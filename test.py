@@ -115,23 +115,25 @@ def get_batch_statistics(outputs, targets, iouv, niou):
             continue
 
         pred_boxes = pred[:, :5]
-        pred_boxes[:, 4] = pred_boxes[:, 4] * 180 / np.pi # convert radians to degrees
         pred_scores = pred[:, 5]
         pred_labels = pred[:, -1]
 
         true_positives = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=targets.device)
-
+        
         if nl:
             detected_boxes = []
             target_labels = tar[:, 0]
             target_boxes = tar[:, 1:]
+
+            # convert radians to degrees
+            pred_boxes[:, 4] = pred_boxes[:, 4] / np.pi * 180
+            target_boxes[:, 4] = target_boxes[:, 4] / np.pi * 180
 
             for cls in torch.unique(target_labels):
                 ti = (cls == target_labels).nonzero(as_tuple=False).view(-1)  # target indices
                 pi = (cls == pred_labels).nonzero(as_tuple=False).view(-1)  # prediction indices
 
                 if pi.shape[0]:
-                    #ious, i = skewiou_2(pred_boxes[pi].detach().cpu(), target_boxes[ti].detach().cpu()).max(1) # best ious, indices
                     ious, i = pairwise_iou_rotated(pred_boxes[pi], target_boxes[ti]).max(1)
 
                     detected_set = set()
@@ -228,25 +230,26 @@ class Test:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
 
-    def load_model(self, n_classes):
+    def load_model(self, n_classes, model_config):
         if not os.path.isfile(self.args.weight_path):
             logger.error("Model weight not found.")
             exit(1)
         pretrained_dict = torch.load(self.args.weight_path, map_location=torch.device('cpu'))
-        self.model = Yolo(n_classes=n_classes)
+        self.model = Yolo(n_classes, model_config)
         self.model = self.model.to(self.device)
         self.model.load_state_dict(pretrained_dict)
 
     def run(self):
         # load hyperparameters
         with open(self.args.hyp, "r") as stream:
-            hyp = yaml.safe_load(stream)
+            config = yaml.safe_load(stream)
+        hyp = config['hyp']
 
         # load data info
         with open(self.args.data, "r") as stream:
             data = yaml.safe_load(stream)
 
-        self.load_model(len(data["names"]))
+        self.load_model(len(data["names"]), config['model'])
 
         compute_loss = ComputeLoss(self.model, hyp)
 
