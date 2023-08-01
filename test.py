@@ -5,6 +5,8 @@ import tqdm
 import glob
 import yaml
 import argparse
+import time
+from detectron2.layers.rotated_boxes import pairwise_iou_rotated
 
 from lib.post_process import post_process, skewiou_2
 from lib.load import load_data
@@ -113,27 +115,27 @@ def get_batch_statistics(outputs, targets, iouv, niou):
             continue
 
         pred_boxes = pred[:, :5]
+        pred_boxes[:, 4] = pred_boxes[:, 4] * 180 / np.pi # convert radians to degrees
         pred_scores = pred[:, 5]
         pred_labels = pred[:, -1]
 
-        true_positives = np.zeros((pred.shape[0], niou), dtype=bool)
+        true_positives = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=targets.device)
 
         if nl:
             detected_boxes = []
             target_labels = tar[:, 0]
             target_boxes = tar[:, 1:]
 
-            for cls in np.unique(target_labels):
-                ti = np.nonzero(cls == target_labels).flatten()
-                pi = np.nonzero(cls == pred_labels).flatten()
+            for cls in torch.unique(target_labels):
+                ti = (cls == target_labels).nonzero(as_tuple=False).view(-1)  # target indices
+                pi = (cls == pred_labels).nonzero(as_tuple=False).view(-1)  # prediction indices
 
                 if pi.shape[0]:
-                    ious, i = skewiou_2(pred_boxes[pi], target_boxes[ti]).max(1) # best ious, indices
-
-                    ious = ious.numpy()
+                    #ious, i = skewiou_2(pred_boxes[pi].detach().cpu(), target_boxes[ti].detach().cpu()).max(1) # best ious, indices
+                    ious, i = pairwise_iou_rotated(pred_boxes[pi], target_boxes[ti]).max(1)
 
                     detected_set = set()
-                    for j in np.nonzero(ious > iouv[0])[0]:
+                    for j in (ious > iouv[0]).nonzero(as_tuple=False):
                         d = ti[i[j]] # detected target
                         if d.item() not in detected_set:
                             detected_set.add(d.item())
@@ -143,7 +145,7 @@ def get_batch_statistics(outputs, targets, iouv, niou):
                                 break
 
         # Append statistics (tp, conf, pcls, tcls)
-        batch_stats.append((true_positives, pred_scores, pred_labels, tcls))
+        batch_stats.append((true_positives.cpu(), pred_scores.cpu(), pred_labels.cpu(), tcls))
     return batch_stats
 
 
@@ -162,7 +164,7 @@ def calculate_eval_stats(stats, num_classes):
     return nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map
 
 
-def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thres, nms_thres):
+def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thres, iou_thres):
     model.eval()
 
     # Get dataloader
@@ -173,8 +175,8 @@ def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thre
     logger.info("Compute mAP...")
 
     stats = []  # List of tuples (tp, conf, pcls, tcls)
-    iouv = np.linspace(0.5, 0.95, 10) # iou vector for mAP@0.5:0.95
-    niou = np.size(iouv)
+    iouv = torch.linspace(0.5, 0.95, 10).to(device) # iou vector for mAP@0.5:0.95
+    niou = iouv.numel()
     seen = 0
     total_loss_items = {}
 
@@ -184,9 +186,9 @@ def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thre
         seen += len(imgs)
 
         with torch.no_grad():
-            outputs, train_outputs = model(imgs, training=False)
-            _, loss_items = compute_loss(train_outputs, targets)
-            outputs = post_process(outputs, conf_thres=conf_thres, nms_thres=nms_thres)
+            outputs, infer_outputs = model(imgs, training=False)
+            _, loss_items = compute_loss(outputs, targets)
+            infer_outputs = post_process(infer_outputs, conf_thres=conf_thres, iou_thres=iou_thres)
 
             for item in loss_items:
                 if item in total_loss_items:
@@ -197,7 +199,7 @@ def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thre
         # Rescale target
         targets[:, 2:6] *= img_size
         # get sample statistics
-        stats += get_batch_statistics(outputs, targets.detach().cpu(), iouv, niou)
+        stats += get_batch_statistics(infer_outputs, targets, iouv, niou)
 
     # Concatenate sample statistics
     stats = [np.concatenate(x, 0) for x in list(zip(*stats))]
@@ -249,14 +251,14 @@ class Test:
         compute_loss = ComputeLoss(self.model, hyp)
 
         test(self.model, compute_loss, self.device, data, hyp, 
-                self.args.img_size, self.args.batch_size, self.args.conf_thres, self.args.nms_thres)
+                self.args.img_size, self.args.batch_size, self.args.conf_thres, self.args.iou_thres)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--weight_path", type=str, default="", help="file path to load model weight")
     parser.add_argument("--conf_thres", type=float, default=0.001, help="object confidence threshold")
-    parser.add_argument("--nms_thres", type=float, default=0.65, help="iou thresshold for non-maximum suppression")
+    parser.add_argument("--iou_thres", type=float, default=0.65, help="iou thresshold for non-maximum suppression")
     parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")
     parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
     parser.add_argument("--data", type=str, default="", help=".yaml path for data")

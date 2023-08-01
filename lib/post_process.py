@@ -2,6 +2,7 @@ import torch
 import cv2 as cv
 import numpy as np
 from shapely.geometry import Polygon
+from detectron2.layers.nms import nms_rotated
 
 
 def xywh2xyxy(x):
@@ -86,7 +87,7 @@ def skewiou_2(box1, box2):
     return iou
 
 
-def post_process(predictions, conf_thres=0.5, nms_thres=0.4):
+def post_process(predictions, conf_thres=0.5, iou_thres=0.4):
     """
     Args:
         predictions: size-> [batch, ((grid x grid) + (grid x grid) + (grid x grid)) x num_anchors, 8]
@@ -95,12 +96,13 @@ def post_process(predictions, conf_thres=0.5, nms_thres=0.4):
     Returns:
         (x1, y1, x2, y2, object_conf, class_score, class_pred)
     """
-    batch_size = predictions[0].size(0)
-    output = [[] for _ in range(batch_size)]
 
     # Settings
-    max_nms = 500 # maximum number of boxes for nms processing
-    max_det = 300 # maximum number of detections per image
+    max_wh = 4096 # min_wh, max_wh = 2, 4096  # (pixels) minimum and maximum box width and height
+    max_nms = 5000  # maximum number of boxes into torchvision.ops.nms()
+    max_det = 1500
+
+    outputs = [torch.zeros((0, 7), device=predictions.device)] * predictions.size(0)
 
     for batch, image_pred in enumerate(predictions):
         # Filter out confidence scores below threshold
@@ -115,33 +117,19 @@ def post_process(predictions, conf_thres=0.5, nms_thres=0.4):
         if image_pred.shape[0] > max_nms:
             image_pred = image_pred[:max_nms]
         class_confs, class_preds = image_pred[:, 6:].max(1, keepdim=True)  # class_preds-> index of classes
-        detections = torch.cat((image_pred[:, :6], class_confs.float(), class_preds.float()), 1).detach().cpu()
+        dets = torch.cat((image_pred[:, :6], class_confs.float(), class_preds.float()), 1)
 
         # non-maximum suppression
-        keep_boxes = []
-        labels = detections[:, -1].unique()
-        for label in labels:
-            detect = detections[detections[:, -1] == label]
-            while len(detect):
-                best_bbox = detect[0]
-                detect = detect[1:]
-                if len(detect):
-                    # Get indices of boxes with lower confidence scores, large IOUs and matching labels
-                    large_overlap = iou(best_bbox[:5], detect[:, :5], nms_thres)
-                    # keep only boxes that has iou smaller than the nms threshold
-                    throwayay = detect[large_overlap]
-                    detect = detect[~large_overlap]
-                    # Merge overlapping bboxes by order of confidence
-                    weights = throwayay[:, 5:6]
-                    best_bbox[:4] = best_bbox[:4] * best_bbox[5] + (weights * throwayay[:, :4]).sum(0)
-                    best_bbox[:4] /= (best_bbox[5] + weights.sum())
-                # store bboxes with high confidence scores
-                keep_boxes.append(best_bbox)
+        c = dets[:, -1:] * max_wh  # classes
+        rboxes = dets[:, :5].clone() 
+        rboxes[:, :2] = rboxes[:, :2] + c # rboxes (offset by class)
+        rboxes[:, 4] = rboxes[:, 4] * 180 / np.pi # convert radians to degrees
+        scores = dets[:, 5]  # scores
 
-        if keep_boxes:
-            keep_boxes = torch.stack(keep_boxes)
-            if keep_boxes.shape[0] > max_det:
-                keep_boxes = keep_boxes[:max_det]
-            output[batch] = keep_boxes
+        i = nms_rotated(rboxes, scores, iou_thres)
+        if i.shape[0] > max_det:  # limit detections
+            i = i[:max_det]
+        
+        outputs[batch] = dets[i]
 
-    return output
+    return outputs

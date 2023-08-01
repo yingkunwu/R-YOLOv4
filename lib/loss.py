@@ -129,7 +129,6 @@ class ComputeLoss:
         self.BCEcls = BCEcls
 
         self.anchors = model.rotated_anchors
-        self.scales = model.scale_x_y
 
     def __call__(self, outputs, target):
         device = target.device
@@ -148,9 +147,9 @@ class ComputeLoss:
             # --------------------
 
             if len(target) > 0:
-                pxy = torch.sigmoid(out[..., 0:2]) * self.scales[i] - (self.scales[i] - 1) / 2
+                pxy = out[..., 0:2].sigmoid() * 2 - 0.5
                 anchor_wh = rotated_anchor[:, :2].view([1, -1, 1, 1, 2])
-                pwh = torch.exp(out[..., 2:4]) * anchor_wh
+                pwh = (out[..., 2:4].sigmoid() * 2) ** 2 * anchor_wh
                 pa = out[..., 4] # predicted angle
                 pbbox = torch.cat((pxy, pwh, pa.unsqueeze(-1)), -1)  # predicted box
 

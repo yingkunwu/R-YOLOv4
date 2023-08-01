@@ -200,7 +200,7 @@ class Train:
             # -------------------
             mp, mr, map50, map5095, total_val_loss = test(
                 self.model, compute_loss, self.device, data, hyp, 
-                self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, nms_thres=0.65
+                self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, iou_thres=0.65
             )
 
             # average losses
