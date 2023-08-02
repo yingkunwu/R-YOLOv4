@@ -149,7 +149,7 @@ class ComputeLoss:
             if len(target) > 0:
                 pxy = out[..., 0:2].sigmoid() * 2 - 0.5
                 anchor_wh = rotated_anchor[:, :2].view([1, -1, 1, 1, 2])
-                pwh = (out[..., 2:4].sigmoid() * 2) ** 2 * anchor_wh
+                pwh = torch.exp(out[..., 2:4]) * anchor_wh
                 pa = out[..., 4] # predicted angle
                 pbbox = torch.cat((pxy, pwh, pa.unsqueeze(-1)), -1)  # predicted box
 

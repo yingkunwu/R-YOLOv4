@@ -19,7 +19,7 @@ class Yolo(nn.Module):
         self.backbone = Backbone()
         self.neck = Neck()
         self.head = Head(output_ch)
-        self.yolo =  YoloLayer(num_classes=n_classes, anchors=self.rotated_anchors, stride=strides)
+        self.yolo = YoloLayer(num_classes=n_classes, anchors=self.rotated_anchors, stride=strides)
 
     def forward(self, i, training):
         d3, d4, d5 = self.backbone(i)
