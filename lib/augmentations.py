@@ -77,9 +77,16 @@ def random_warping(images, targets, degrees=10, scale=.9, translate=.1, border=(
     targets[:, 2:4] = new_xy
     targets[:, 4:6] = new_wh
 
-    targets[:, 6] = targets[:, 6] - a * np.pi / 180
-    targets[:, 6][targets[:, 6] <= -np.pi / 2] = targets[:, 6][targets[:, 6] <= -np.pi / 2] + np.pi
+    theta = targets[:, 6] + a * np.pi / 180
+    for i in range(len(theta)):
+        t = theta[i]
+        if t > np.pi / 2:
+            t -= np.pi
+        elif t <= -np.pi / 2:
+            t += np.pi
+        theta[i] = t
+    targets[:, 6] = theta
 
-    assert (-np.pi / 2 < targets[:, 6]).all() or (targets[:, 6] <= np.pi / 2).all()
+    assert (-np.pi / 2 < targets[:, 6]).all() and (targets[:, 6] <= np.pi / 2).all()
 
     return output, targets

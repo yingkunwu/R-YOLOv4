@@ -148,10 +148,10 @@ class BaseDataset(Dataset):
         """
         Args:
             index: index of label files going to be load
-            label_factor: factor that resize labels to the same size with images
             pad: the amount of zero pixel value that are padded beside images
-            padded_size: the size of images after padding
-
+            img_size0: original image size
+            img_size: image size after resizing
+            boarder: exceed which targets should be discard
         Returns:
             Normalized labels of objects -> [batch_index, label, x, y, w, h, theta] -> torch.Size([num_targets, 7])
         """
@@ -203,18 +203,12 @@ class BaseDataset(Dataset):
             assert False, "Label file not found"
 
     def load_mosaic(self, index):
-        """
-        Loads 1 image + 3 random images into a 4-image mosaic.
-        Each image is cropped based on the sameple_size.
-        A larger sample size means more information in each image would be used.
-        """
+        # loads 1 image + 3 random images into a 4-image mosaic
 
         labels4 = []
         s = self.img_size
         yc, xc = [int(random.uniform(-x, 2 * s + x)) for x in self.mosaic_border] # mosaic center x, y
         indices = [index] + random.choices(range(len(self.img_files)), k=3) # 3 additional image indices
-
-        padded_size = (s * 2, s * 2)
 
         for i, index in enumerate(indices):
             img, (h0, w0), (h, w) = self.load_image(index)
@@ -256,8 +250,6 @@ class BaseDataset(Dataset):
         labels9 = []
         s = self.img_size
         indices = [index] + random.choices(range(len(self.img_files)), k=8) # 8 additional image indices
-
-        padded_size = (s * 3, s * 3)
 
         for i, index in enumerate(indices):
             img, (h_, w_), (h, w) = self.load_image(index)
@@ -312,7 +304,8 @@ class BaseDataset(Dataset):
 
         return img9, labels9
 
-    def filtering(self, targets, boarder):
+    @staticmethod
+    def filtering(targets, boarder):
         # Remove objects that exceed the boarder
         x1, x2, y1, y2 = boarder
         mask = (
@@ -322,7 +315,8 @@ class BaseDataset(Dataset):
 
         return targets[mask]
     
-    def normalize(self, targets, img_size):
+    @staticmethod
+    def normalize(targets, img_size):
         # Normalize x, y, w, h, of targets into [0, 1]
         height, width = img_size
         targets[:, [2, 4]] /= width
