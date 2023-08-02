@@ -5,14 +5,13 @@ import numpy as np
 from PIL import Image
 import cv2
 import torch
-import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
 from lib.augmentations import hsv, vertical_flip, horisontal_flip, mixup, random_warping
 
 
-def pad_to_square(img, new_shape, pad_value, stride=32):
+def pad_to_square(img, new_shape, pad_value):
     shape = img.shape[:2]
 
     # Scale ratio (new / old)
@@ -159,25 +158,17 @@ class BaseDataset(Dataset):
         label_path = self.label_files[index % len(self.img_files)].rstrip()
 
         if os.path.exists(label_path):
-            x, y, w, h, theta, label, num_targets = self.load_files(label_path)
+            rboxes, labels = self.load_files(label_path)
+
+            x, y, w, h, theta = rboxes[:, 0], rboxes[:, 1], rboxes[:, 2], rboxes[:, 3], rboxes[:, 4]
 
             # Return zero length tersor if there is no object in the image
-            if not num_targets:
+            if not len(labels):
                 return torch.zeros((0, 7))
 
             # Check whether theta of oriented bounding boxes are within the defined range or not
             if not ((-np.pi / 2 < theta).all() or (theta <= np.pi / 2).all()):
                 raise AssertionError("Theta of oriented bounding boxes are not within the boundary (-pi / 2, pi / 2]")
-
-            # Make the height of bounding boxes always larger then it's width
-            for i in range(num_targets):
-                if w[i] > h[i]:
-                    temp1, temp2 = h[i].clone(), w[i].clone()
-                    w[i], h[i] = temp1, temp2
-                    if theta[i] > 0:
-                        theta[i] = theta[i] - np.pi / 2
-                    else:
-                        theta[i] = theta[i] + np.pi / 2
 
             # Normalizd coordinates if it has not been normalized yet
             if not self.normalized_labels:
@@ -195,8 +186,8 @@ class BaseDataset(Dataset):
             h *= h_
 
             # Create targets
-            targets = torch.zeros((len(label), 7))
-            targets[:, 1:] = torch.vstack([label, x, y, w, h, theta]).T
+            targets = torch.zeros((len(labels), 7))
+            targets[:, 1:] = torch.vstack([labels, x, y, w, h, theta]).T
 
             if boarder is not None:
                 targets = self.filtering(targets, boarder)

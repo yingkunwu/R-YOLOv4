@@ -2,13 +2,11 @@ import torch
 import numpy as np
 import os
 import tqdm
-import glob
 import yaml
 import argparse
-import time
 from detectron2.layers.rotated_boxes import pairwise_iou_rotated
 
-from lib.post_process import post_process, skewiou_2
+from lib.post_process import post_process
 from lib.load import load_data
 from lib.loss import ComputeLoss
 from lib.logger import logger

@@ -4,18 +4,19 @@ import os
 import yaml
 
 from lib.load import load_data
+from lib.plot import xywha2xyxyxyxy
 
 
 if __name__ == "__main__":
     # load hyperparameters
     with open("data/hyp.yaml", "r") as stream:
-        hyp = yaml.safe_load(stream)
+        config = yaml.safe_load(stream)
 
     # load data info
     with open("data/UCAS_AOD.yaml", "r") as stream:
         data = yaml.safe_load(stream)
     
-    train_dataset, train_dataloader = load_data(data['train'], data['names'], data['type'], hyp, 608, 1, augment=True)
+    train_dataset, train_dataloader = load_data(data['train'], data['names'], data['type'], config["hyp"], 608, 1, augment=False)
 
     for i, (img_path, imgs, targets) in enumerate(train_dataloader):
         print(targets)
@@ -26,7 +27,7 @@ if __name__ == "__main__":
         for p in targets:
             x, y, w, h, theta = p[2] * img.shape[1], p[3] * img.shape[1], p[4] * img.shape[1], p[5] * img.shape[1], p[6]
 
-            bbox = cv.boxPoints(((x, y), (w, h), theta / np.pi * 180))
+            bbox = xywha2xyxyxyxy((x, y, w, h, theta))
             bbox = np.int0(bbox)
             cv.drawContours(img, [bbox], 0, (255, 0, 0), 1)
 
