@@ -1,4 +1,4 @@
-import time
+import math
 import random
 import numpy as np
 import torch
@@ -11,7 +11,6 @@ import argparse
 
 from model.yolo import Yolo
 from lib.load import load_data
-from lib.scheduler import one_cycle
 from lib.logger import Logger, logger
 from lib.loss import ComputeLoss
 from torch.optim.lr_scheduler import  LambdaLR
@@ -32,6 +31,11 @@ def weights_init_normal(m):
     elif isinstance(m, torch.nn.BatchNorm2d):
         torch.nn.init.normal_(m.weight.data, 1.0, 0.02)
         torch.nn.init.constant_(m.bias.data, 0.0)
+
+
+def one_cycle(y1=0.0, y2=1.0, steps=100):
+    # lambda function for sinusoidal ramp from y1 to y2
+    return lambda x: ((1 - math.cos(x * math.pi / steps)) / 2) * (y2 - y1) + y1
 
 
 def fitness(x):
