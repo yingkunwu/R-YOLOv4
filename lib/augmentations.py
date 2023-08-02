@@ -87,6 +87,8 @@ def random_warping(images, targets, degrees=10, scale=.9, translate=.1, border=(
         theta[i] = t
     targets[:, 6] = theta
 
-    assert (-np.pi / 2 < targets[:, 6]).all() and (targets[:, 6] <= np.pi / 2).all()
+    # Check whether theta of oriented bounding boxes are within the defined range or not
+    assert np.logical_and(-np.pi / 2 < theta, theta <= np.pi / 2).all(), \
+        ("Theta of oriented bounding boxes are not within the boundary (-pi / 2, pi / 2]")
 
     return output, targets

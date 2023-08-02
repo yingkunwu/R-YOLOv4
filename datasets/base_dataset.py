@@ -167,8 +167,8 @@ class BaseDataset(Dataset):
                 return torch.zeros((0, 7))
 
             # Check whether theta of oriented bounding boxes are within the defined range or not
-            if not ((-np.pi / 2 < theta).all() or (theta <= np.pi / 2).all()):
-                raise AssertionError("Theta of oriented bounding boxes are not within the boundary (-pi / 2, pi / 2]")
+            assert np.logical_and(-np.pi / 2 < theta, theta <= np.pi / 2).all(), \
+                ("Theta of oriented bounding boxes are not within the boundary (-pi / 2, pi / 2]")
 
             # Normalizd coordinates if it has not been normalized yet
             if not self.normalized_labels:
