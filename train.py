@@ -1,19 +1,19 @@
 import math
 import random
-import numpy as np
-import torch
 import os
 import shutil
 import json
 import tqdm
 import yaml
 import argparse
+import numpy as np
+import torch
+from torch.optim.lr_scheduler import LambdaLR
 
 from model.yolo import Yolo
 from lib.load import load_data
 from lib.logger import Logger, logger
 from lib.loss import ComputeLoss
-from torch.optim.lr_scheduler import  LambdaLR
 from test import test
 
 
