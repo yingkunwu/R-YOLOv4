@@ -8,7 +8,7 @@ import cv2 as cv
 import numpy as np
 
 from lib.plot import plot_boxes
-from lib.post_process import post_process
+from lib.general import post_process
 from datasets.base_dataset import ImageDataset
 from model.yolo import Yolo
 from lib.logger import logger

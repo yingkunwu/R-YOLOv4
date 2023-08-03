@@ -248,7 +248,7 @@ class ComputeLoss:
         for i, (anchor_ious, angle_offset) in enumerate(zip(arious.t(), offset.t())):
             noobj_mask[b[i], (anchor_ious > self.ignore_thresh), gj[i], gi[i]] = 0
             # if iou is greater than 0.4 and the angle offset if smaller than 15 degrees then ignore training
-            noobj_mask[b[i], (anchor_ious > 0.4) & (angle_offset < (np.pi / 12)), gj[i], gi[i]] = 0
+            noobj_mask[b[i], (anchor_ious > 0.6) & (angle_offset < (np.pi / 12)), gj[i], gi[i]] = 0
 
         # Bounding Boxes
         tbbox[b, best_n, gj, gi] = torch.cat((gxy - gij, gwh, ga.unsqueeze(-1)), -1)

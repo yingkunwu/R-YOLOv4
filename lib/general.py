@@ -66,7 +66,7 @@ def xyxyxyxy2xywha(box):
 
     # Make the height of bounding boxes always larger then it's width
     for i in range(num_samples):
-        if w[i] > h[i]:
+        if w[i] >= h[i]:
             tmp1, tmp2 = h[i].clone(), w[i].clone()
             w[i], h[i] = tmp1, tmp2
             if theta[i] > 0:
