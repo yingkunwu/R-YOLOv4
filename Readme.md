@@ -57,7 +57,7 @@ The objective of this project is to adapt YOLOv4 model to detecting oriented obj
     ├── lib/
     ├── outputs/
     ├── weights/
-        ├── pretrained/ (for training)
+        ├── ryolov4.pth (pretrained weight)
         └── UCAS-AOD/ (for testing and detection)
     └── data/
         └── UCAS-AOD/
