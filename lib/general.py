@@ -33,10 +33,10 @@ def xywha2xyxyxyxy(box):
     M = cv.getRotationMatrix2D((x, y), degree, 1)
 
     w, h = box[2], box[3]
-    x1, y1 = x - w / 2, y - h / 2
-    x2, y2 = x + w / 2, y - h / 2
-    x3, y3 = x + w / 2, y + h / 2
-    x4, y4 = x - w / 2, y + h / 2
+    x1, y1 = x - h / 2, y - w / 2
+    x2, y2 = x + h / 2, y - w / 2
+    x3, y3 = x + h / 2, y + w / 2
+    x4, y4 = x - h / 2, y + w / 2
     p = np.array([[x1, y1, 1.0], [x2, y2, 1.0], [x3, y3, 1.0], [x4, y4, 1.0]])
     
     rbox = M @ p.T
@@ -60,9 +60,11 @@ def xyxyxyxy2xywha(box):
 
     x = (x1 + x2 + x3 + x4) / 4
     y = (y1 + y2 + y3 + y4) / 4
-    w = torch.sqrt(torch.pow((x1 - x2), 2) + torch.pow((y1 - y2), 2))
-    h = torch.sqrt(torch.pow((x2 - x3), 2) + torch.pow((y2 - y3), 2))
-    theta = -(torch.atan2(y2 - y1, x2 - x1) + torch.atan2(y3 - y4, x3 - x4)) / 2
+    w = (torch.linalg.norm(torch.stack((x2 - x3, y2 - y3), -1), dim=1) + 
+        torch.linalg.norm(torch.stack((x1 - x4, y1 - y4), -1), dim=1)) / 2
+    h = (torch.linalg.norm(torch.stack((x1 - x2, y1 - y2), -1), dim=1) + 
+        torch.linalg.norm(torch.stack((x4 - x3, y4 - y3), -1), dim=1)) / 2
+    theta = -(torch.atan2(y1 - y2, x1 - x2) + torch.atan2(y4 - y3, x4 - x3)) / 2
 
     # Make the height of bounding boxes always larger then it's width
     for i in range(num_samples):
