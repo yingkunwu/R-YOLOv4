@@ -8,7 +8,28 @@ import torch
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
-from lib.augmentations import hsv, vertical_flip, horisontal_flip, mixup, random_warping
+from lib.augmentations import hsv, vertical_flip, horizontal_flip, mixup, random_warping
+
+
+def gaussian_label_cpu(label, num_class, u=0, sig=4.0):
+    """
+    转换成CSL Labels:
+        用高斯窗口函数根据角度θ的周期性赋予gt labels同样的周期性,使得损失函数在计算边界处时可以做到“差值很大但loss很小”;
+        并且使得其labels具有环形特征,能够反映各个θ之间的角度距离
+    Args:
+        label (float32):[1], theta class
+        num_theta_class (int): [1], theta class num
+        u (float32):[1], mean
+        sig (float32):[1], standard deviation, which is window radius for Circular Smooth Label
+    Returns:
+        csl_label (array): [num_theta_class], gaussian function smooth label
+    """
+    x = np.arange(-num_class/2, num_class/2)
+    y_sig = np.exp(-(x - u) ** 2 / (2 * sig ** 2))
+    index = int(num_class/2 - label)
+    return np.concatenate([y_sig[index:], 
+                           y_sig[:index]], axis=0)
+
 
 
 def pad_to_square(img, new_shape, pad_value):
@@ -49,12 +70,14 @@ class ImageDataset(Dataset):
         #  Width in {320, 416, 512, 608, ... 320 + 96 * m}
         img_path = self.files[index % len(self.files)]
 
-        # Extract image as PyTorch tensor
-        img = np.array(Image.open(img_path).convert('RGB'))
+        # Read image from file
+        img = cv2.imread(img_path)
         # Pad to square resolution
         img, _ = pad_to_square(img, (self.img_size, self.img_size), 0)
         # Turn into tensor
-        img = transforms.ToTensor()(img)
+        img = img.transpose((2, 0, 1))[::-1] # BGR to RGB
+        img = np.ascontiguousarray(img)
+        img = torch.from_numpy(img).float() / 255
 
         return img_path, img
 
@@ -101,14 +124,18 @@ class BaseDataset(Dataset):
         # Remove objects that exceed the size of images
         targets = self.filtering(targets, (0, img.shape[1], 0, img.shape[0]))
         targets = self.normalize(targets, img.shape[:2])
-        img = transforms.ToTensor()(img)
 
         # horizontal flip augmentation
         if self.augment and np.random.random() < self.hyp['fliplr']:
-            img, targets = horisontal_flip(img, targets)
+            img, targets = horizontal_flip(img, targets)
         # vertical flip augmentation
         if self.augment and np.random.random() < self.hyp['flipud']:
             img, targets = vertical_flip(img, targets)
+
+        # Convert
+        img = img.transpose((2, 0, 1))[::-1] # BGR to RGB
+        img = np.ascontiguousarray(img)
+        img = torch.from_numpy(img).float() / 255
 
         return self.img_files[index], img, targets
 
@@ -127,7 +154,7 @@ class BaseDataset(Dataset):
         img_path = self.img_files[index]
 
         # Extract image as PyTorch tensor
-        img = np.array(Image.open(img_path).convert('RGB'))
+        img = cv2.imread(img_path)
         h, w, c = img.shape
         
         # Handle images with less than three channels

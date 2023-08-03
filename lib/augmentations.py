@@ -9,7 +9,7 @@ def hsv(img, hgain=0.015, sgain=0.7, vgain=0.4):
     # HSV color-space augmentation
     if hgain or sgain or vgain:
         r = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain] + 1  # random gains
-        hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_RGB2HSV))
+        hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
 
         x = np.arange(0, 256, dtype=r.dtype)
         lut_hue = ((x * r[0]) % 180).astype(np.uint8)
@@ -17,7 +17,7 @@ def hsv(img, hgain=0.015, sgain=0.7, vgain=0.4):
         lut_val = np.clip(x * r[2], 0, 255).astype(np.uint8)
 
         im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
-        cv2.cvtColor(im_hsv, cv2.COLOR_HSV2RGB, dst=img)
+        cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=img)
 
 
 def mixup(img, labels, img2, labels2):
@@ -28,14 +28,14 @@ def mixup(img, labels, img2, labels2):
 
 
 def vertical_flip(images, targets):
-    images = torch.flip(images, [1])
+    images = np.flipud(images)
     targets[:, 3] = 1 - targets[:, 3]
     targets[:, 6] = - targets[:, 6]
     return images, targets
 
 
-def horisontal_flip(images, targets):
-    images = torch.flip(images, [-1])
+def horizontal_flip(images, targets):
+    images = np.fliplr(images)
     targets[:, 2] = 1 - targets[:, 2]
     targets[:, 6] = - targets[:, 6]
     return images, targets
