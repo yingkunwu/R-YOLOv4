@@ -85,6 +85,10 @@ def xyxyxyxy2xywha(box):
             t += np.pi
         theta[i] = t
 
+    # Check whether theta of oriented bounding boxes are within the defined range
+    assert torch.logical_and(-np.pi / 2 < theta, theta <= np.pi / 2).all(), \
+        ("Theta of oriented bounding boxes are not within the boundary (-pi / 2, pi / 2]")
+
     return torch.stack((x, y, w, h, theta), -1)
 
 

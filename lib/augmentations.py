@@ -29,15 +29,13 @@ def mixup(img, labels, img2, labels2):
 
 def vertical_flip(images, targets):
     images = np.flipud(images)
-    targets[:, 3] = 1 - targets[:, 3]
-    targets[:, 6] = - targets[:, 6]
+    targets[:, [3, 5, 7, 9]] = 1 - targets[:, [3, 5, 7, 9]]
     return images, targets
 
 
 def horizontal_flip(images, targets):
     images = np.fliplr(images)
-    targets[:, 2] = 1 - targets[:, 2]
-    targets[:, 6] = - targets[:, 6]
+    targets[:, [2, 4, 6, 8]] = 1 - targets[:, [2, 4, 6, 8]]
     return images, targets
 
 
@@ -62,33 +60,15 @@ def random_warping(images, targets, degrees=10, scale=.9, translate=.1, border=(
     T[1, 2] = random.uniform(0.3 - translate, 0.3 + translate) * height  # y translation (pixels)
 
     M = T @ R @ C
-    output = cv2.warpPerspective(images, M, dsize=(width, height), borderValue=(0, 0, 0))
+    output = cv2.warpPerspective(images, M, dsize=(width, height), borderValue=(114, 114, 114))
 
     M = torch.tensor(M, dtype=torch.double)
 
-    xy = targets[:, 2:4] # num of target x 2
-    xy = torch.cat((xy, torch.ones(xy.size()[0]).view(xy.size()[0],1)), dim = -1).double() # num of target x 3 
+    xyxyxyxy = targets[:, 2:] # x1, y1, x2, y2, x3, y3, x4, y4
+    xyxyxyxy = xyxyxyxy.reshape(-1, 2)
+    xyxyxyxy = torch.cat((xyxyxyxy, torch.ones(xyxyxyxy.size()[0]).view(xyxyxyxy.size()[0],1)), dim = -1).double()
     
-    new_xy = (torch.matmul(M, xy.t())).t()[:, :2]
-
-    wh = targets[:, 4:6]
-    new_wh = wh * s
-
-    targets[:, 2:4] = new_xy
-    targets[:, 4:6] = new_wh
-
-    theta = targets[:, 6] + a * np.pi / 180
-    for i in range(len(theta)):
-        t = theta[i]
-        if t > np.pi / 2:
-            t -= np.pi
-        elif t <= -np.pi / 2:
-            t += np.pi
-        theta[i] = t
-    targets[:, 6] = theta
-
-    # Check whether theta of oriented bounding boxes are within the defined range or not
-    assert np.logical_and(-np.pi / 2 < theta, theta <= np.pi / 2).all(), \
-        ("Theta of oriented bounding boxes are not within the boundary (-pi / 2, pi / 2]")
+    xyxyxyxy = (torch.matmul(M, xyxyxyxy.t())).t()[:, :2]
+    targets[:, 2:] = xyxyxyxy.reshape(-1, 8)
 
     return output, targets
