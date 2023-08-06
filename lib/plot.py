@@ -3,14 +3,7 @@ import numpy as np
 import cv2 as cv
 import os
 
-
-def xywh2xyxy(x):
-    y = x.new(x.shape)
-    y[..., 0] = x[..., 0] - x[..., 2] / 2
-    y[..., 1] = x[..., 1] - x[..., 3] / 2
-    y[..., 2] = x[..., 0] + x[..., 2] / 2
-    y[..., 3] = x[..., 1] + x[..., 3] / 2
-    return y
+from lib.general import xywh2xyxy, xywha2xyxyxyxy
 
 
 def rescale_boxes(boxes, current_dim, original_shape):
@@ -68,8 +61,7 @@ def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None
             else:
                 rgb = (red, green, blue)
 
-            x, y, w, h, theta = box[0], box[1], box[2], box[3], box[4]
-            bbox = cv.boxPoints(((x, y), (w, h), theta / np.pi * 180))
+            bbox = xywha2xyxyxyxy(box)
             bbox = np.int0(bbox)
             cv.drawContours(img, [bbox], 0, rgb, 2)
 

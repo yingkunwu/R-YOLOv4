@@ -6,25 +6,29 @@ import torch.nn.functional as F
 
 
 class FocalLoss(nn.Module):
-    # Reference: https://github.com/ultralytics/yolov5/blob/8918e6347683e0f2a8a3d7ef93331001985f6560/utils/loss.py#L32
-    def __init__(self, alpha=0.25, gamma=2, reduction="none"):
+    def __init__(self, loss_fcn, gamma=2, alpha=0.25):
         super(FocalLoss, self).__init__()
+        self.loss_fcn = loss_fcn
         self.gamma = gamma
         self.alpha = alpha
-        self.reduction = reduction
+        self.reduction = loss_fcn.reduction
+        self.loss_fcn.reduction = 'none'  # required to apply FL to each element
 
-    def forward(self, inputs, targets):
-        loss = F.binary_cross_entropy(inputs, targets, reduction='none')
-        p_t = targets * inputs + (1 - targets) * (1 - inputs)
-        alpha_factor = targets * self.alpha + (1 - targets) * (1 - self.alpha)
+    def forward(self, pred, true):
+        loss = self.loss_fcn(pred, true)
+
+        pred_prob = torch.sigmoid(pred)  # prob from logits
+        p_t = true * pred_prob + (1 - true) * (1 - pred_prob)
+        alpha_factor = true * self.alpha + (1 - true) * (1 - self.alpha)
         modulating_factor = (1.0 - p_t) ** self.gamma
         loss *= alpha_factor * modulating_factor
 
         if self.reduction == 'mean':
-            loss = loss.mean()
+            return loss.mean()
         elif self.reduction == 'sum':
-            loss = loss.sum()
-        return loss
+            return loss.sum()
+        else:  # 'none'
+            return loss
     
 
 def anchor_wh_iou(wh1, wh2):
@@ -105,40 +109,53 @@ def bbox_xywha_ciou(pred_boxes, target_boxes):
 
 
 class ComputeLoss:
-    def __init__(self, hyp):
-        self.focal_loss = FocalLoss(gamma=hyp['fl_gamma'], reduction="mean")
+    def __init__(self, model, hyp):
+        device = next(model.parameters()).device  # get model device
 
         self.ignore_thresh = hyp['ignore_thresh']
         self.lambda_coord = hyp['box']
         self.lambda_conf_scale = hyp['obj']
         self.lambda_cls_scale = hyp['cls']
 
-    def __call__(self, outputs, target, masked_anchors):
+        BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([hyp['obj_pw']], device=device))
+        BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([hyp['cls_pw']], device=device))
+
+        g = hyp['fl_gamma']  # focal loss gamma
+        if g > 0:
+            BCEcls = FocalLoss(BCEcls, g)
+            BCEobj = FocalLoss(BCEobj, g)
+
+        self.BCEobj = BCEobj
+        self.BCEcls = BCEcls
+
+        self.anchors = model.rotated_anchors
+
+    def __call__(self, outputs, target):
         device = target.device
 
         # initializing loss
         reg_loss, conf_loss, cls_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
-
-        for output, masked_anchor in zip(outputs, masked_anchors):
-            pbbox = output[..., :5] # prediction of (x, y, w, h, a)
-            pa = output[..., 5] # prediction of angle
-            pconf = output[..., 6] # prediction of confidence score
-            pcls = output[..., 7:] # prediction of class
-
+        
+        for i, out in enumerate(outputs):
             # num of (batches, anchors(3*6), downsample grid sizes, _ , classes)
-            nB, nA, nG, _, nC = pcls.size()
-            obj_mask, noobj_mask, tbbox, ta, tcls, tconf = self.build_targets(target, masked_anchor, nB, nA, nG, nC, device)
+            nB, nA, nG, _, nC = out.size()
+            rotated_anchor = torch.tensor(self.anchors[i], device=device)
+            obj_mask, noobj_mask, tbbox, ta, tcls, tconf = self.build_targets(target, rotated_anchor, nB, nA, nG, nC - 6, device)
 
             # --------------------
             # - Calculating Loss -
             # --------------------
 
             if len(target) > 0:
-                # Reg Loss for bounding box prediction
-                #with torch.no_grad():
-                #    img_size = self.stride * nG
-                #    bbox_loss_scale = 2.0 - 1.0 * gwh[:, 0] * gwh[:, 1] / (img_size ** 2)
-                #ciou = bbox_loss_scale * (1.0 - ciou)
+                pxy = out[..., 0:2].sigmoid() * 2 - 0.5
+                anchor_wh = rotated_anchor[:, :2].view([1, -1, 1, 1, 2])
+                pwh = torch.exp(out[..., 2:4]) * anchor_wh
+                pa = out[..., 4] # predicted angle
+                pbbox = torch.cat((pxy, pwh, pa.unsqueeze(-1)), -1)  # predicted box
+
+                pconf = out[..., 5] # objectness score
+                pcls = out[..., 6:] # confidence score of classses
+
                 ariou, ciou = bbox_xywha_ciou(pbbox[obj_mask], tbbox[obj_mask])
                 ciou = (1.0 - ciou)
 
@@ -153,12 +170,12 @@ class ComputeLoss:
                 reg_loss += (reg_magnitude * reg_vector).mean()
 
                 # Focal Loss for object's prediction
-                conf_loss += self.focal_loss(pconf[obj_mask], tconf[obj_mask])
+                conf_loss += self.BCEobj(pconf[obj_mask], tconf[obj_mask])
 
                 # Binary Cross Entropy Loss for class' prediction
-                cls_loss += F.binary_cross_entropy(pcls[obj_mask], tcls[obj_mask], reduction="mean")
+                cls_loss += self.BCEcls(pcls[obj_mask], tcls[obj_mask])
 
-            conf_loss += self.focal_loss(pconf[noobj_mask], tconf[noobj_mask])
+            conf_loss += self.BCEobj(pconf[noobj_mask], tconf[noobj_mask])
 
         # Loss scaling
         reg_loss = self.lambda_coord * reg_loss
@@ -213,7 +230,8 @@ class ComputeLoss:
         # Separate target values
         # b indicates which batch, target_labels is the class label (0 or 1)
         b, target_labels = target[:, :2].long().t()
-        gi, gj = gxy.long().t()
+        gij = gxy.long()
+        gi, gj = gij.t()
 
         # Avoid the error caused by the wrong position of the center coordinate of objects
         gi = torch.clamp(gi, 0, nG - 1)
@@ -230,10 +248,10 @@ class ComputeLoss:
         for i, (anchor_ious, angle_offset) in enumerate(zip(arious.t(), offset.t())):
             noobj_mask[b[i], (anchor_ious > self.ignore_thresh), gj[i], gi[i]] = 0
             # if iou is greater than 0.4 and the angle offset if smaller than 15 degrees then ignore training
-            noobj_mask[b[i], (anchor_ious > 0.4) & (angle_offset < (np.pi / 12)), gj[i], gi[i]] = 0
+            noobj_mask[b[i], (anchor_ious > 0.6) & (angle_offset < (np.pi / 12)), gj[i], gi[i]] = 0
 
         # Bounding Boxes
-        tbbox[b, best_n, gj, gi] = torch.cat((gxy, gwh, ga.unsqueeze(-1)), -1)
+        tbbox[b, best_n, gj, gi] = torch.cat((gxy - gij, gwh, ga.unsqueeze(-1)), -1)
 
         # Angle (encode)
         ta[b, best_n, gj, gi] = ga - masked_anchors[best_n][:, 2]

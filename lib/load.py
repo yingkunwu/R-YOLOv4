@@ -9,9 +9,9 @@ from datasets.DOTA_dataset import DOTADataset
 def load_data(data_dir, class_names, dataset_type, hyp, img_size=608, batch_size=4, augment=False, shuffle=True):
     if dataset_type == "UCAS_AOD":
         dataset = UCASAODDataset(data_dir, class_names, hyp, img_size=img_size, augment=augment)
-    elif dataset == "DOTA":
+    elif dataset_type == "DOTA":
         dataset = DOTADataset(data_dir, class_names, hyp, img_size=img_size, augment=augment)
-    elif dataset == "custom":
+    elif dataset_type == "custom":
         dataset = CustomDataset(data_dir, class_names, hyp, img_size=img_size, augment=augment)
     else:
         raise NotImplementedError

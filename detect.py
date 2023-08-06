@@ -8,7 +8,7 @@ import cv2 as cv
 import numpy as np
 
 from lib.plot import plot_boxes
-from lib.post_process import post_process
+from lib.general import post_process
 from datasets.base_dataset import ImageDataset
 from model.yolo import Yolo
 from lib.logger import logger
@@ -20,12 +20,12 @@ class Detect:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = None
 
-    def load_model(self, n_classes):
+    def load_model(self, n_classes, model_config):
         if not os.path.isfile(self.args.weight_path):
             logger.error("Model weight not found.")
             exit(1)
         pretrained_dict = torch.load(self.args.weight_path, map_location=self.device)
-        self.model = Yolo(n_classes=n_classes)
+        self.model = Yolo(n_classes, model_config)
         self.model = self.model.to(self.device)
         self.model.load_state_dict(pretrained_dict)
 
@@ -34,17 +34,20 @@ class Detect:
         if not os.path.exists(save_folder):
             os.makedirs(save_folder)
         for i, (img_path, box) in enumerate(zip(imgs, boxes)):
-            plot_boxes(img_path, box, class_names, self.args.img_size, save_folder)
+            plot_boxes(img_path, box.cpu(), class_names, self.args.img_size, save_folder)
 
     def detect(self):
         # load data info
         with open(self.args.data, "r") as stream:
             data = yaml.safe_load(stream)
 
+        with open(self.args.hyp, "r") as stream:
+            config = yaml.safe_load(stream)
+
         dataset = ImageDataset(data["test"], img_size=self.args.img_size, ext=self.args.ext)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.args.batch_size, shuffle=False)
 
-        self.load_model(len(data["names"]))
+        self.load_model(len(data["names"]), config['model'])
         self.model.eval()
 
         start = time.time()
@@ -53,9 +56,9 @@ class Detect:
 
             with torch.no_grad():
                 temp = time.time()
-                output, _  = self.model(img)  # batch=1 -> [1, n, n], batch=3 -> [3, n, n]
+                outputs, infer_outputs = self.model(img, training=False)
                 temp1 = time.time()
-                boxes = post_process(output,self.args.img_size, self.args.conf_thres, self.args.nms_thres)
+                boxes = post_process(infer_outputs, self.args.conf_thres, self.args.nms_thres)
                 temp2 = time.time()
 
                 logger.info('-----------------------------------')
@@ -87,6 +90,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, default=8, help="size of the batches")
     parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
     parser.add_argument("--data", type=str, default="", help=".yaml path for data")
+    parser.add_argument("--hyp", type=str, default="", help=".yaml path for hyperparameters")
     parser.add_argument("--ext", type=str, default="png", choices=["png", "jpg"], help="Image file format")
     args = parser.parse_args()
     print(args)

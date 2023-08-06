@@ -9,7 +9,7 @@ def hsv(img, hgain=0.015, sgain=0.7, vgain=0.4):
     # HSV color-space augmentation
     if hgain or sgain or vgain:
         r = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain] + 1  # random gains
-        hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_RGB2HSV))
+        hue, sat, val = cv2.split(cv2.cvtColor(img, cv2.COLOR_BGR2HSV))
 
         x = np.arange(0, 256, dtype=r.dtype)
         lut_hue = ((x * r[0]) % 180).astype(np.uint8)
@@ -17,7 +17,7 @@ def hsv(img, hgain=0.015, sgain=0.7, vgain=0.4):
         lut_val = np.clip(x * r[2], 0, 255).astype(np.uint8)
 
         im_hsv = cv2.merge((cv2.LUT(hue, lut_hue), cv2.LUT(sat, lut_sat), cv2.LUT(val, lut_val)))
-        cv2.cvtColor(im_hsv, cv2.COLOR_HSV2RGB, dst=img)
+        cv2.cvtColor(im_hsv, cv2.COLOR_HSV2BGR, dst=img)
 
 
 def mixup(img, labels, img2, labels2):
@@ -28,16 +28,14 @@ def mixup(img, labels, img2, labels2):
 
 
 def vertical_flip(images, targets):
-    images = torch.flip(images, [1])
-    targets[:, 3] = 1 - targets[:, 3]
-    targets[:, 6] = - targets[:, 6]
+    images = np.flipud(images)
+    targets[:, [3, 5, 7, 9]] = 1 - targets[:, [3, 5, 7, 9]]
     return images, targets
 
 
-def horisontal_flip(images, targets):
-    images = torch.flip(images, [-1])
-    targets[:, 2] = 1 - targets[:, 2]
-    targets[:, 6] = - targets[:, 6]
+def horizontal_flip(images, targets):
+    images = np.fliplr(images)
+    targets[:, [2, 4, 6, 8]] = 1 - targets[:, [2, 4, 6, 8]]
     return images, targets
 
 
@@ -62,24 +60,15 @@ def random_warping(images, targets, degrees=10, scale=.9, translate=.1, border=(
     T[1, 2] = random.uniform(0.3 - translate, 0.3 + translate) * height  # y translation (pixels)
 
     M = T @ R @ C
-    output = cv2.warpPerspective(images, M, dsize=(width, height), borderValue=(0, 0, 0))
+    output = cv2.warpPerspective(images, M, dsize=(width, height), borderValue=(114, 114, 114))
 
     M = torch.tensor(M, dtype=torch.double)
 
-    xy = targets[:, 2:4] # num of target x 2
-    xy = torch.cat((xy, torch.ones(xy.size()[0]).view(xy.size()[0],1)), dim = -1).double() # num of target x 3 
+    xyxyxyxy = targets[:, 2:] # x1, y1, x2, y2, x3, y3, x4, y4
+    xyxyxyxy = xyxyxyxy.reshape(-1, 2)
+    xyxyxyxy = torch.cat((xyxyxyxy, torch.ones(xyxyxyxy.size()[0]).view(xyxyxyxy.size()[0],1)), dim = -1).double()
     
-    new_xy = (torch.matmul(M, xy.t())).t()[:, :2]
-
-    wh = targets[:, 4:6]
-    new_wh = wh * s
-
-    targets[:, 2:4] = new_xy
-    targets[:, 4:6] = new_wh
-
-    targets[:, 6] = targets[:, 6] - a * np.pi / 180
-    targets[:, 6][targets[:, 6] <= -np.pi / 2] = targets[:, 6][targets[:, 6] <= -np.pi / 2] + np.pi
-
-    assert (-np.pi / 2 < targets[:, 6]).all() or (targets[:, 6] <= np.pi / 2).all()
+    xyxyxyxy = (torch.matmul(M, xyxyxyxy.t())).t()[:, :2]
+    targets[:, 2:] = xyxyxyxy.reshape(-1, 8)
 
     return output, targets

@@ -15,27 +15,34 @@ The objective of this project is to adapt YOLOv4 model to detecting oriented obj
 
 ### Setup
 
-1. Clone and Setup Environment
+1. Clone repository
     ```
     $ git clone https://github.com/kunnnnethan/R-YOLOv4.git
     $ cd R-YOLOv4/
     ```
-    Create Conda Environment
+2. Create Conda Environment
     ```
-    $ conda env create -f environment.yml
+    $ conda create -n ryolo python=3.8
+    $ conda activate ryolo
     ```
-    Create Python Virtual Environment
+3. Install PyTorch and torchvision following the [official instructions](https://pytorch.org), e.g.,
     ```
-    $ python3.8 -m venv (your environment name)
-    $ source ~/your-environment-name/bin/activate
-    $ pip3 install torch torchvision torchaudio
+    If you are using CUDA 11.8 version
+    $ conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+    ```
+4. Install required libraries
+    ```
     $ pip install -r requirements.txt
     ```
+5. Install detectron2 for calculating SkewIoU on GPU following the [official instructions](https://detectron2.readthedocs.io/en/latest/tutorials/install.html), e.g.,
+    ```
+    python -m pip install 'git+https://github.com/facebookresearch/detectron2.git'
+    ```
 
-2. Download  pretrained weights</br>
+6. Download  pretrained weights</br>
     [weights](https://drive.google.com/uc?export=download&id=1A_C4KzYsSa8yidp_5Wf9B9DIwPG7N7C8)
     
-3. Make sure your files arrangment looks like the following</br>
+7. Make sure your files arrangment looks like the following</br>
     Note that each of your dataset folder in `data` should split into three files, namely `train`, `test`, and `detect`.
     ```
     R-YOLOv4/
@@ -50,7 +57,7 @@ The objective of this project is to adapt YOLOv4 model to detecting oriented obj
     ├── lib/
     ├── outputs/
     ├── weights/
-        ├── pretrained/ (for training)
+        ├── ryolov4.pth (pretrained weight)
         └── UCAS-AOD/ (for testing and detection)
     └── data/
         └── UCAS-AOD/
@@ -110,7 +117,7 @@ python detect.py --data data/UCAS_AOD.yaml --weight_path weights/ryolov4/best.pt
 If you would like to use tensorboard for tracking traing process.
 
 * Open additional terminal in the same folder where you are running program.
-* Run command ```$ tensorboard --logdir='weights/your_model_name' --port=6006``` 
+* Run command ```$ tensorboard --logdir=weights --port=6006``` 
 * Go to [http://localhost:6006/]( http://localhost:6006/)
 
 ### Results
@@ -119,7 +126,7 @@ If you would like to use tensorboard for tracking traing process.
 
 | Method | Plane | Car | mAP |
 | -------- | -------- | -------- | -------- |
-| YOLOv4 (smoothL1-iou) | 98.05 | 92.05 | 95.05|
+| YOLOv4 (smoothL1-iou) | 98.2 | 82.4 | 90.03|
 
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/UCAS_AOD/P0292.png" alt="car" height="430"/>
 <img src="https://github.com/kunnnnethan/R-YOLOv4/blob/main/outputs/UCAS_AOD/P0769.png" alt="plane" height="413"/>
