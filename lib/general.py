@@ -110,19 +110,21 @@ def post_process(predictions, conf_thres=0.5, iou_thres=0.4):
     outputs = [torch.zeros((0, 7), device=predictions.device)] * predictions.size(0)
 
     for batch, image_pred in enumerate(predictions):
-        # Filter out confidence scores below threshold
-        image_pred = image_pred[image_pred[:, 5] >= conf_thres]
-        # If none are remaining => process next image
-        if not image_pred.shape[0]:
-            continue
         # Object confidence times class confidence
-        score = image_pred[:, 5] * image_pred[:, 6:].max(1)[0]
-        # Sort by it
-        image_pred = image_pred[(score).argsort(descending=True)]
-        if image_pred.shape[0] > max_nms:
-            image_pred = image_pred[:max_nms]
+        image_pred[:, 6:] *= image_pred[:, 5:6]
+        # Get predicted classes and the confidence score according to it
         class_confs, class_preds = image_pred[:, 6:].max(1, keepdim=True)  # class_preds-> index of classes
-        dets = torch.cat((image_pred[:, :6], class_confs.float(), class_preds.float()), 1)
+        # Detections matrix nx7 (xywhθ, conf, cls), θ ∈ (-pi/2, pi/2]
+        dets = torch.cat((image_pred[:, :5], class_confs.float(), class_preds.float()), 1)
+        # Filter out confidence scores below threshold
+        dets = dets[class_confs.view(-1) > conf_thres]
+        # If none are remaining => process next image
+        if not dets.shape[0]:
+            continue
+        # Sort by it
+        dets = dets[dets[:, 5].argsort(descending=True)]
+        if dets.shape[0] > max_nms:
+            dets = dets[:max_nms]
 
         # non-maximum suppression
         c = dets[:, -1:] * max_wh  # classes

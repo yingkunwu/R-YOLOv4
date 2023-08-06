@@ -114,7 +114,7 @@ def get_batch_statistics(outputs, targets, iouv, niou):
 
         pred_boxes = pred[:, :5]
         pred_scores = pred[:, 5]
-        pred_labels = pred[:, -1]
+        pred_labels = pred[:, 6]
 
         true_positives = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=targets.device)
         
