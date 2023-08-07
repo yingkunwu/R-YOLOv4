@@ -3,7 +3,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from .kfloss import KFLoss
 
 class FocalLoss(nn.Module):
     def __init__(self, loss_fcn, gamma=2, alpha=0.25):
@@ -116,6 +116,7 @@ class ComputeLoss:
         self.lambda_coord = hyp['box']
         self.lambda_conf_scale = hyp['obj']
         self.lambda_cls_scale = hyp['cls']
+        self.kfloss = KFLoss()
 
         BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([hyp['obj_pw']], device=device))
         BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([hyp['cls_pw']], device=device))
@@ -134,40 +135,53 @@ class ComputeLoss:
         device = target.device
 
         # initializing loss
-        reg_loss, conf_loss, cls_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
+        reg_loss, conf_loss, cls_loss, xy_loss, kf_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
         
         for i, out in enumerate(outputs):
             # num of (batches, anchors(3*6), downsample grid sizes, _ , classes)
             nB, nA, nG, _, nC = out.size()
             rotated_anchor = torch.tensor(self.anchors[i], device=device)
-            obj_mask, noobj_mask, tbbox, ta, tcls, tconf = self.build_targets(target, rotated_anchor, nB, nA, nG, nC - 6, device)
+            obj_mask, noobj_mask, tbbox, tbbox_decode, ta, tcls, tconf = self.build_targets(target, rotated_anchor, nB, nA, nG, nC - 6, device)
 
             # --------------------
             # - Calculating Loss -
             # --------------------
 
             if len(target) > 0:
-                pxy = out[..., 0:2].sigmoid() * 2 - 0.5
+                grid_x = torch.arange(nG, device=device).repeat(nG, 1).view([1, 1, nG, nG, 1])
+                grid_y = torch.arange(nG, device=device).repeat(nG, 1).t().view([1, 1, nG, nG, 1])
+                grid_xy = torch.cat((grid_x, grid_y), -1)
+
                 anchor_wh = rotated_anchor[:, :2].view([1, -1, 1, 1, 2])
+                anchor_a =  rotated_anchor[:, 2].view([1, -1, 1, 1])
+
+                pxy = out[..., 0:2].sigmoid() * 2 - 0.5
                 pwh = torch.exp(out[..., 2:4]) * anchor_wh
                 pa = out[..., 4] # predicted angle
+
                 pbbox = torch.cat((pxy, pwh, pa.unsqueeze(-1)), -1)  # predicted box
+                pbbox_decode = torch.cat((pxy + grid_xy, pwh, (pa + anchor_a).unsqueeze(-1)), -1)
 
                 pconf = out[..., 5] # objectness score
                 pcls = out[..., 6:] # confidence score of classses
 
-                ariou, ciou = bbox_xywha_ciou(pbbox[obj_mask], tbbox[obj_mask])
-                ciou = (1.0 - ciou)
+                # ariou, ciou = bbox_xywha_ciou(pbbox[obj_mask], tbbox[obj_mask])
+                # ciou = (1.0 - ciou)
 
-                angle_loss = F.smooth_l1_loss(pa[obj_mask], ta[obj_mask], reduction="none")
+                # angle_loss = F.smooth_l1_loss(pa[obj_mask], ta[obj_mask], reduction="none")
 
-                reg_vector = angle_loss + ciou
+                # reg_vector = angle_loss + ciou
 
-                with torch.no_grad():
-                    ariou = torch.exp(1 - ariou) - 1 # scale the magnitude of ArIoU
-                    reg_magnitude = ariou / reg_vector
+                # with torch.no_grad():
+                #     ariou = torch.exp(1 - ariou) - 1 # scale the magnitude of ArIoU
+                #     reg_magnitude = ariou / reg_vector
 
-                reg_loss += (reg_magnitude * reg_vector).mean()
+                # reg_loss += (reg_magnitude * reg_vector).mean()
+                reg, xy, kf = self.kfloss(pred = pbbox[obj_mask],target = tbbox[obj_mask],pred_decode = pbbox_decode[obj_mask],targets_decode = tbbox_decode[obj_mask])
+
+                reg_loss += reg
+                xy_loss += xy 
+                kf_loss += kf 
 
                 # Focal Loss for object's prediction
                 conf_loss += self.BCEobj(pconf[obj_mask], tconf[obj_mask])
@@ -188,7 +202,8 @@ class ComputeLoss:
         # --------------------
         loss_items = {
             "total_loss": loss.detach().cpu().item(),
-            "reg_loss": reg_loss.detach().cpu().item(),
+            "kf_loss": kf_loss.detach().cpu().item(),
+            "xy_loss" : xy_loss.detach().cpu().item(),
             "conf_loss": conf_loss.detach().cpu().item(),
             "cls_loss": cls_loss.detach().cpu().item()
         }
@@ -200,6 +215,7 @@ class ComputeLoss:
         obj_mask = torch.zeros((nB, nA, nG, nG), device=device)
         noobj_mask = torch.ones((nB, nA, nG, nG), device=device)
         tbbox = torch.zeros((nB, nA, nG, nG, 5), device=device)
+        tbbox_decode = torch.zeros((nB, nA, nG, nG, 5), device=device)
         ta = torch.zeros((nB, nA, nG, nG), device=device)
         tcls = torch.zeros((nB, nA, nG, nG, nC), device=device)
         #print(nA,nG,nB)
@@ -252,6 +268,7 @@ class ComputeLoss:
 
         # Bounding Boxes
         tbbox[b, best_n, gj, gi] = torch.cat((gxy - gij, gwh, ga.unsqueeze(-1)), -1)
+        tbbox_decode[b, best_n, gj, gi] = torch.cat((gxy, gwh, ga.unsqueeze(-1)), -1)
 
         # Angle (encode)
         ta[b, best_n, gj, gi] = ga - masked_anchors[best_n][:, 2]
@@ -263,4 +280,4 @@ class ComputeLoss:
         obj_mask = obj_mask.type(torch.bool)
         noobj_mask = noobj_mask.type(torch.bool)
 
-        return obj_mask, noobj_mask, tbbox, ta, tcls, tconf
+        return obj_mask, noobj_mask, tbbox, tbbox_decode, ta, tcls, tconf

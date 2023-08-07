@@ -159,7 +159,7 @@ class Train:
             self.model.train()
             total_train_loss = {}
       
-            logger.info(('\n' + '%10s' * 6) % ('Epoch', 'lr', 'box_loss', 'obj_loss', 'cls_loss', 'total'))
+            logger.info(('\n' + '%10s' * 7) % ('Epoch', 'lr', 'kf_loss','xy_loss', 'obj_loss', 'cls_loss', 'total'))            
             pbar = enumerate(train_dataloader)
             pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
             for batch, (_, imgs, targets) in pbar:
@@ -183,8 +183,8 @@ class Train:
                     optimizer.zero_grad()
                 
                 # print info
-                s = ('%10s'  + '%10.4g' * 5) % (
-                    '%g/%g' % (epoch + 1, self.args.epochs), optimizer.param_groups[0]["lr"], loss_items["reg_loss"],
+                s = ('%10s'  + '%10.4g' * 6) % (
+                    '%g/%g' % (epoch + 1, self.args.epochs), optimizer.param_groups[0]["lr"], loss_items["kf_loss"],loss_items["xy_loss"],
                     loss_items["conf_loss"], loss_items["cls_loss"], loss_items["total_loss"])
                 # store loss items
                 for item in loss_items:
@@ -230,7 +230,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--batch_size", type=int, default=4, help="size of batches")
     parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
-    parser.add_argument("--weights_path", type=str, default="weights/yolov4.pth", help="path to pretrained weights file")
+    parser.add_argument("--weights_path", type=str, default="weights/pretrained/yolov4.pth", help="path to pretrained weights file")
     parser.add_argument("--model_name", type=str, default="trash", help="new model name")
     parser.add_argument("--data", type=str, default="", help=".yaml path for data")
     parser.add_argument("--config", type=str, default="", help=".yaml path for configs")
