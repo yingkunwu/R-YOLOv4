@@ -1,7 +1,5 @@
-# Copyright (c) SJTU. All rights reserved.
 import torch
 from torch import nn
-
 
 
 def xy_wh_r_2_xy_sigma(xywhr):
@@ -19,84 +17,26 @@ def xy_wh_r_2_xy_sigma(xywhr):
 
     _shape = xywhr.size()
     assert _shape[-1] == 5
+
     xy = xywhr[..., :2]
-    wh = xywhr[..., 2:4].clamp(min=1e-7, max=1e7).reshape(-1, 2)
+    wh = xywhr[..., 2:4].clamp(min=1e-7, max=1e7)
     r = xywhr[..., 4]
+
     cos_r = torch.cos(r)
     sin_r = torch.sin(r)
+
     R = torch.stack((cos_r, -sin_r, sin_r, cos_r), dim=-1).reshape(-1, 2, 2)
-    S = 0.5 * torch.diag_embed(wh)
 
-    sigma = R.bmm(S.square()).bmm(R.permute(0, 2,
-                                            1)).reshape(_shape[:-1] + (2, 2))
+    S = (0.5 * torch.diag_embed(wh)).square()
 
-    return xy, sigma
+    sigma = R.bmm(S).bmm(R.permute(0, 2, 1)).reshape((_shape[0], 2, 2))
 
-
-
-def kfiou_loss(pred,
-               target,
-               pred_decode=None,
-               targets_decode=None,
-               fun="exp",
-               beta=1.0,
-               eps=1e-6):
-    """Kalman filter IoU loss.
-
-    Args:
-        pred (torch.Tensor): Predicted bboxes.
-        target (torch.Tensor): Corresponding gt bboxes.
-        pred_decode (torch.Tensor): Predicted decode bboxes.
-        targets_decode (torch.Tensor): Corresponding gt decode bboxes.
-        fun (str): The function applied to distance. Defaults to None.
-        beta (float): Defaults to 1.0/9.0.
-        eps (float): Defaults to 1e-6.
-
-    Returns:
-        loss (torch.Tensor)
-    """
-    xy_p = pred[:, :2]
-    xy_t = target[:, :2]
-    _, Sigma_p = xy_wh_r_2_xy_sigma(pred_decode)
-    _, Sigma_t = xy_wh_r_2_xy_sigma(targets_decode)
-
-    # Smooth-L1 norm
-    diff = torch.abs(xy_p - xy_t)
-    xy_loss = torch.where(diff < beta, 0.5 * diff * diff / beta,
-                          diff - 0.5 * beta).sum(dim=-1)
-    
-    Vb_p = 4 * Sigma_p.det().sqrt()
-    Vb_t = 4 * Sigma_t.det().sqrt()
-
-    K = Sigma_p.bmm((Sigma_p + Sigma_t).inverse())
-    Sigma = Sigma_p - K.bmm(Sigma_p)
-    Vb = 4 * Sigma.det().sqrt()
-
-    Vb = torch.where(torch.isnan(Vb), torch.full_like(Vb, 0), Vb)
-    # print(Vb)
-    # print(Vb_t)
-    # print(Vb_p)
-    KFIoU = Vb / (Vb_p + Vb_t - Vb + eps)
-    KFIoU = torch.where(torch.isnan(KFIoU), torch.full_like(KFIoU, 0), KFIoU)
-
-    if fun == 'ln':
-        kf_loss = -torch.log(KFIoU + eps)
-    elif fun == 'exp':
-        kf_loss = torch.exp(1 - KFIoU) - 1
-    else:
-        kf_loss = 1 - KFIoU
-    # print(xy_loss)
-
-    #print(kf_loss.mean())
-
-    loss = (xy_loss + kf_loss).clamp(0)
-    #print(loss)
-
-    return loss.mean(), xy_loss.mean(), kf_loss.mean()
+    return xy, wh, sigma
 
 
 class KFLoss(nn.Module):
     """Kalman filter based loss.
+    ref: https://github.com/open-mmlab/mmrotate/blob/main/mmrotate/models/losses/kf_iou_loss.py
 
     Args:
         fun (str, optional): The function applied to distance.
@@ -109,25 +49,14 @@ class KFLoss(nn.Module):
         loss (torch.Tensor)
     """
 
-    def __init__(self,
-                 fun='none',
-                 reduction='mean',
-                 ):
+    def __init__(self, fun='none', reduction='mean'):
         super(KFLoss, self).__init__()
         assert reduction in ['none', 'sum', 'mean']
         assert fun in ['none', 'ln', 'exp']
         self.fun = fun
         self.reduction = reduction
 
-    def forward(self,
-                pred,
-                target,
-                weight=None,
-                avg_factor=None,
-                pred_decode=None,
-                targets_decode=None,
-                reduction_override=None,
-                ):
+    def forward(self, pred, target, beta=1.0, eps=1e-6):
         """Forward function.
 
         Args:
@@ -146,31 +75,32 @@ class KFLoss(nn.Module):
         Returns:
             loss (torch.Tensor)
         """
-        assert reduction_override in (None, 'none', 'mean', 'sum')
-        reduction = (
-            reduction_override if reduction_override else self.reduction)
-        if (weight is not None) and (not torch.any(weight > 0)) and (
-                reduction != 'none'):
-            return (pred * weight).sum()
-        if weight is not None and weight.dim() > 1:
-            assert weight.shape == pred.shape
-            weight = weight.mean(-1)
+        xy_p, wh_p, Sigma_p = xy_wh_r_2_xy_sigma(pred)
+        xy_t, wh_t, Sigma_t = xy_wh_r_2_xy_sigma(target)
 
-        return kfiou_loss(
-            pred,
-            target,
-            fun=self.fun,
-            pred_decode=pred_decode,
-            targets_decode=targets_decode)
+        # Smooth-L1 norm
+        diff = torch.abs(xy_p - xy_t)
+        xy_loss = torch.where(diff < beta, 0.5 * diff * diff / beta, diff - 0.5 * beta).sum(dim=-1)
 
+        Vb_p = wh_p[:, 0] * wh_p[:, 1]
+        Vb_t = wh_t[:, 0] * wh_t[:, 1]
 
-        # return kfiou_loss(
-        #     pred,
-        #     target,
-        #     fun=self.fun,
-        #     weight=weight,
-        #     avg_factor=avg_factor,
-        #     pred_decode=pred_decode,
-        #     targets_decode=targets_decode,
-        #     reduction=reduction,
-        #     **kwargs) * self.loss_weight
+        K = Sigma_p.bmm((Sigma_p + Sigma_t).inverse())
+        Sigma = Sigma_p - K.bmm(Sigma_p)
+        
+        #Vb = 4 * Sigma.det().sqrt()
+        eig = torch.linalg.eigvals(Sigma)
+        Vb = 4 * torch.sqrt((eig[:, 0] * eig[:, 1]).real)
+        Vb = torch.where(torch.isnan(Vb), torch.full_like(Vb, 0), Vb)
+        KFIoU = Vb / (Vb_p + Vb_t - Vb + eps)
+
+        if self.fun == 'ln':
+            kf_loss = -torch.log(KFIoU + eps)
+        elif self.fun == 'exp':
+            kf_loss = torch.exp(1 - KFIoU) - 1
+        else:
+            kf_loss = 1 - KFIoU
+
+        loss = (xy_loss + kf_loss).clamp(0)
+
+        return loss.mean(), xy_loss.mean(), kf_loss.mean()
