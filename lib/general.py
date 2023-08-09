@@ -4,6 +4,29 @@ import cv2 as cv
 from detectron2.layers.nms import nms_rotated
 
 
+def norm_angle(theta):
+    """Limit the range of angles.
+
+    Args:
+        theta (ndarray): shape(n, ).
+
+    Returns:
+        theta (ndarray): shape(n, ).
+    """
+    for i in range(len(theta)):
+        t = theta[i]
+        if t >= np.pi / 2:
+            t -= np.pi
+        elif t < -np.pi / 2:
+            t += np.pi
+        theta[i] = t
+
+    assert torch.logical_and(-np.pi / 2 <= theta, theta < np.pi / 2).all(), \
+        ("Theta of oriented bounding boxes are not within the boundary [-pi / 2, pi / 2)")
+    
+    return theta
+
+
 def xywh2xyxy(x):
     """
     Convert (x, y, w, h) to (x1, y1, x2, y2).
@@ -76,18 +99,8 @@ def xyxyxyxy2xywha(box):
             else:
                 theta[i] = theta[i] + np.pi / 2
 
-    # ensure the range of theta span in (-np.pi / 2, np.pi / 2]
-    for i in range(num_samples):
-        t = theta[i]
-        if t > np.pi / 2:
-            t -= np.pi
-        elif t <= -np.pi / 2:
-            t += np.pi
-        theta[i] = t
-
-    # Check whether theta of oriented bounding boxes are within the defined range
-    assert torch.logical_and(-np.pi / 2 < theta, theta <= np.pi / 2).all(), \
-        ("Theta of oriented bounding boxes are not within the boundary (-pi / 2, pi / 2]")
+    # ensure the range of theta span in [-np.pi / 2, np.pi / 2)
+    theta = norm_angle(theta)
 
     return torch.stack((x, y, w, h, theta), -1)
 

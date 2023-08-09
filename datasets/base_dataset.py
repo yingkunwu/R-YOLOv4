@@ -70,7 +70,7 @@ class BaseDataset(Dataset):
     def __getitem__(self, index):
         if self.augment and random.random() < self.hyp['mosaic']:
             # mosaic augmentation
-            if random.random() < 0.0:
+            if random.random() < 0.8:
                 img, targets = self.load_mosaic(index)
             else:
                 img, targets = self.load_mosaic9(index)
@@ -80,7 +80,7 @@ class BaseDataset(Dataset):
             )
             # mixup augmentation
             if np.random.random() < self.hyp['mixup']:
-                if random.random() < 0.0:
+                if random.random() < 0.8:
                     img2, targets2 = self.load_mosaic(random.randint(0, len(self.img_files) - 1))
                 else:
                     img2, targets2 = self.load_mosaic9(random.randint(0, len(self.img_files) - 1))

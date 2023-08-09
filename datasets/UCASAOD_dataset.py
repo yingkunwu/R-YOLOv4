@@ -46,7 +46,7 @@ class UCASAODDataset(BaseDataset):
 
             polys = torch.stack((x1, y1, x2, y2, x3, y3, x4, y4), -1)
 
-            return polys, labels
-
         else:
-            return None, None, None, None, None, None, 0
+            polys = torch.zeros((0, 8))
+
+        return polys, labels

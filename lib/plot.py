@@ -50,7 +50,7 @@ def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None
         for i in range(len(boxes)):
             box = boxes[i]
 
-            cls_id = np.squeeze(int(box[7]))
+            cls_id = np.squeeze(int(box[6]))
             classes = len(class_names)
             offset = cls_id * 93 % classes
             red = get_color(2, offset, classes)
