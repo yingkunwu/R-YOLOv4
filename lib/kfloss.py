@@ -103,4 +103,4 @@ class KFLoss(nn.Module):
 
         loss = (xy_loss + kf_loss).clamp(0)
 
-        return loss.mean(), xy_loss.mean(), kf_loss.mean()
+        return loss.mean(), xy_loss.mean(), kf_loss.mean(), KFIoU * 3
