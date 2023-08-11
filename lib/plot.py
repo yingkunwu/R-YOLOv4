@@ -65,7 +65,7 @@ def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None
             bbox = np.int0(bbox)
             cv.drawContours(img, [bbox], 0, rgb, 2)
 
-            img = cv.putText(img, class_names[cls_id] + ":" + str(round(box[5] * box[6], 2)),
+            img = cv.putText(img, class_names[cls_id] + ":" + str(round(box[5], 2)),
                             tuple(bbox[0]), cv.FONT_HERSHEY_SIMPLEX, 0.6, rgb, 1)
 
     output_path = os.path.join(output_folder, os.path.split(img_path)[-1])
