@@ -11,15 +11,15 @@ class Yolo(nn.Module):
     def __init__(self, n_classes, model_config):
         super().__init__()
         output_ch = (5 + 1 + n_classes) * 3 * 6
-        anchors = model_config["anchors"]
-        angles = [a * np.pi / 180 for a in model_config["angles"]]
-        strides = [8, 16, 32]
+        self.anchors = model_config["anchors"]
+        self.angles = [a * np.pi / 180 for a in model_config["angles"]]
+        self.strides = [8, 16, 32]
         
-        self.rotated_anchors = self._make_anchors(strides, anchors, angles)
+        self.rotated_anchors = self._make_anchors(self.strides, self.anchors, self.angles)
         self.backbone = Backbone()
         self.neck = Neck()
         self.head = Head(output_ch)
-        self.yolo = YoloLayer(num_classes=n_classes, anchors=self.rotated_anchors, stride=strides)
+        self.yolo = YoloLayer(num_classes=n_classes, anchors=self.rotated_anchors, stride=self.strides)
 
     def forward(self, i, training):
         d3, d4, d5 = self.backbone(i)

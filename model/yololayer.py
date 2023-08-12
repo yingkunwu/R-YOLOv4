@@ -49,7 +49,7 @@ class YoloLayer(nn.Module):
                 # Eliminate grid sensitivity: pred_xy = 2 * (pred_xy - 0.5) + 0.5 (shifting center and scaling)
                 pxy = (y[..., 0:2].sigmoid() * 2 - 0.5 + grid_xy) * self.stride[i]
                 pwh = torch.exp(y[..., 2:4]) * anchor_wh * self.stride[i]
-                pa = y[..., 4] + anchor_a
+                pa = (y[..., 4].sigmoid() - 0.5) * 0.5236 + anchor_a
                 pconf = y[..., 5].sigmoid() # objectness score
                 pcls = y[..., 6:].sigmoid() # confidence score of classses
 
