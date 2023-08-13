@@ -6,20 +6,13 @@ from detectron2.layers.nms import nms_rotated
 
 def norm_angle(theta):
     """Limit the range of angles.
-
     Args:
-        theta (ndarray): shape(n, ).
-
+        theta (Tensor): shape(n,)
     Returns:
-        theta (ndarray): shape(n, ).
+        theta (Tensor): shape(n,)
     """
-    for i in range(len(theta)):
-        t = theta[i]
-        if t >= np.pi / 2:
-            t -= np.pi
-        elif t < -np.pi / 2:
-            t += np.pi
-        theta[i] = t
+    theta = torch.where(theta >= np.pi / 2, theta - np.pi, theta)
+    theta = torch.where(theta < -np.pi / 2, theta + np.pi, theta)
 
     assert torch.logical_and(-np.pi / 2 <= theta, theta < np.pi / 2).all(), \
         ("Theta of oriented bounding boxes are not within the boundary [-pi / 2, pi / 2)")
@@ -31,10 +24,12 @@ def xywh2xyxy(x):
     """
     Convert (x, y, w, h) to (x1, y1, x2, y2).
     Arguments:
-        x (Tensor[N, 4])
+        x (Tensor): shape(N, 4)
     Returns:
-        y (Tensor[N, 4])
+        y (Tensor): shape(N, 4)
     """
+    assert isinstance(x, torch.Tensor), "Input should be torch.tensors."
+
     y = x.new(x.shape)
     y[..., 0] = x[..., 0] - x[..., 2] / 2
     y[..., 1] = x[..., 1] - x[..., 3] / 2
@@ -43,43 +38,48 @@ def xywh2xyxy(x):
     return y
 
 
-def xywha2xyxyxyxy(box):
+def xywha2xyxyxyxy(boxes):
     """
-    Convert (x, y, w, h, a) to (x1, y1, x2, y2, x3, y3, x4, y4).
+    Convert (x, y, w, h, theta) to (x1, y1, x2, y2, x3, y3, x4, y4).
     Note that angle is in radians and positive rotations are clockwise (under image coordinate).
     Arguments:
-        box (numpy array[5])
+        boxes (Tensor): shape(N, 5)
     Returns:
-        box (numpy array[8])
+        rboxes (Tensor): shape(N, 4, 2)
     """
-    x, y, degree = float(box[0]), float(box[1]), float(box[4] / np.pi * 180)
-    M = cv.getRotationMatrix2D((x, y), degree, 1)
+    num_samples = boxes.size(0)
+    Rs = torch.zeros((num_samples, 2, 3))
+    x, y, w, h, theta = boxes.unbind(dim=-1)
 
-    w, h = box[2], box[3]
+    for i in range(num_samples):
+        R = cv.getRotationMatrix2D((float(x[i]), float(y[i])), float(theta[i] * 180 / np.pi), 1)
+        Rs[i] = torch.from_numpy(R)
+
     x1, y1 = x - h / 2, y - w / 2
     x2, y2 = x + h / 2, y - w / 2
     x3, y3 = x + h / 2, y + w / 2
     x4, y4 = x - h / 2, y + w / 2
-    p = np.array([[x1, y1, 1.0], [x2, y2, 1.0], [x3, y3, 1.0], [x4, y4, 1.0]])
-    
-    rbox = M @ p.T
 
-    return rbox.T
+    p = torch.stack((x1, y1, x2, y2, x3, y3, x4, y4), dim=-1).reshape(-1, 4, 2)
+    p = torch.cat((p, torch.ones((num_samples, 4, 1))), dim=-1)
+    rboxes = torch.bmm(p, Rs.permute((0, 2, 1)))
+
+    return rboxes
 
 
-def xyxyxyxy2xywha(box):
+def xyxyxyxy2xywha(boxes):
     """
-    Convert (x1, y1, x2, y2, x3, y3, x4, y4) to (x, y, w, h, a).
+    Convert (x1, y1, x2, y2, x3, y3, x4, y4) to (x, y, w, h, theta).
     This function assumes that 4 vertices of bboxes [(x1, y2), (x2, y2), ... ] are in clockwise order.
     It returns a box defined in 180-degrees angular range, meaning that theta is determined by the long side (h) of the rectangle and x-axis.
     Also note that theta is in radians and the positive rotations of theta are clockwise as defined under image coordinate.
     Arguments:
-        box (Tensor[N, 8])
+        boxes (Tensor): shape(N, 8)
     Returns:
-        z (Tensor[N, 5])
+        boxes (Tensor): shape(N, 5)
     """
-    num_samples = box.size(0)
-    x1, y1, x2, y2, x3, y3, x4, y4 = box[:, 0], box[:, 1], box[:, 2], box[:, 3], box[:, 4], box[:, 5], box[:, 6], box[:, 7]
+    num_samples = boxes.size(0)
+    x1, y1, x2, y2, x3, y3, x4, y4 = boxes.unbind(dim=-1)
 
     x = (x1 + x2 + x3 + x4) / 4
     y = (y1 + y2 + y3 + y4) / 4
@@ -92,8 +92,7 @@ def xyxyxyxy2xywha(box):
     # Make the height of bounding boxes always larger then it's width
     for i in range(num_samples):
         if w[i] >= h[i]:
-            tmp1, tmp2 = h[i].clone(), w[i].clone()
-            w[i], h[i] = tmp1, tmp2
+            w[i], h[i] = h[i].clone(), w[i].clone()
             if theta[i] > 0:
                 theta[i] = theta[i] - np.pi / 2
             else:
@@ -108,11 +107,11 @@ def xyxyxyxy2xywha(box):
 def post_process(predictions, conf_thres=0.5, iou_thres=0.4):
     """
     Args:
-        predictions: size-> [batch, ((grid x grid) + (grid x grid) + (grid x grid)) x num_anchors, 8]
-                    ex: [1, ((52 x 52) + (26 x 26) + (13 x 13)) x 18, 8] in my case
-                    last dimension-> [x, y, w, h, theta, conf, cls_pred]
+        predictions (Tensor): shape(batch size, (grid_size_1^2 + grid_size_1^2, grid_size_3^2) x num_anchors, 6 + num_classes)
+        e.g. : [1, ((52 x 52) + (26 x 26) + (13 x 13)) x 18, 8] with rotated anchors and 416 image size
     Returns:
-        (x1, y1, x2, y2, object_conf, class_score, class_pred)
+        outputs (Tensor): shape(batch size, 7)
+        last dimension-> (x, y, w, h, theta, confidence score, class id)
     """
 
     # Settings

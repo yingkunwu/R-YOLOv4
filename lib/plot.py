@@ -42,31 +42,29 @@ def get_color(c, x, max_val):
 
 def plot_boxes(img_path, boxes, class_names, img_size, output_folder, color=None):
     img = np.array(cv.imread(img_path))
+    nc = len(class_names)
 
     if len(boxes):
         boxes = rescale_boxes(boxes, img_size, img.shape[:2])
-        boxes = np.array(boxes)
+        polys = xywha2xyxyxyxy(boxes[:, :5])
+        polys = np.array(polys, dtype=np.intp)
 
-        for i in range(len(boxes)):
-            box = boxes[i]
+        preds = np.array(boxes[:, 5:])
 
-            cls_id = np.squeeze(int(box[6]))
-            classes = len(class_names)
-            offset = cls_id * 93 % classes
-            red = get_color(2, offset, classes)
-            green = get_color(1, offset, classes)
-            blue = get_color(0, offset, classes)
+        for poly, pred in zip(polys, preds):
+            cls_id = int(pred[1])
+            offset = cls_id * 93 % nc
+            red = get_color(2, offset, nc)
+            green = get_color(1, offset, nc)
+            blue = get_color(0, offset, nc)
             if color:
                 rgb = color
             else:
                 rgb = (red, green, blue)
 
-            bbox = xywha2xyxyxyxy(box)
-            bbox = np.int0(bbox)
-            cv.drawContours(img, [bbox], 0, rgb, 2)
-
-            img = cv.putText(img, class_names[cls_id] + ":" + str(round(box[5], 2)),
-                            tuple(bbox[0]), cv.FONT_HERSHEY_SIMPLEX, 0.6, rgb, 1)
+            cv.drawContours(img, [poly], 0, rgb, 2)
+            img = cv.putText(img, class_names[cls_id] + ":" + str(round(pred[0], 2)),
+                            tuple(poly[0]), cv.FONT_HERSHEY_SIMPLEX, 0.6, rgb, 1)
 
     output_path = os.path.join(output_folder, os.path.split(img_path)[-1])
     cv.imwrite(output_path, img)
