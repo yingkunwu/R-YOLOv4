@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from model.yolo import Yolo
 from lib.load import load_data
 from lib.logger import Logger, logger
-from lib.loss import ComputeLoss
+from lib.loss import ComputeCSLLoss, ComputeKFIoULoss
 from test import test
 
 
@@ -67,9 +67,9 @@ class Train:
         os.makedirs(self.model_path)
         os.makedirs(os.path.join(self.model_path, "logs"))
 
-    def load_model(self, n_classes, model_config):
+    def load_model(self, n_classes, model_config, mode):
         pretrained_dict = torch.load(self.args.weights_path)
-        self.model = Yolo(n_classes, model_config)
+        self.model = Yolo(n_classes, model_config, mode)
         self.model = self.model.to(self.device)
         model_dict = self.model.state_dict()
 
@@ -123,15 +123,23 @@ class Train:
         # load configs
         with open(self.args.config, "r") as stream:
             config = yaml.safe_load(stream)
-        hyp = config['hyp']
+
+        model_cfg, hyp_cfg = config['model'], config['hyp']
 
         self.check_model_path()
-        self.load_model(len(data["names"]), config['model'])
+        self.load_model(len(data["names"]), model_cfg, self.args.mode)
         self.save_opts(config)
         self.logger = Logger(os.path.join(self.model_path, "logs"))
 
+        if self.args.mode == "csl":
+            csl = True
+            compute_loss = ComputeCSLLoss(self.model, hyp_cfg)
+        else:
+            csl = False
+            compute_loss = ComputeKFIoULoss(self.model, hyp_cfg)
+
         train_dataset, train_dataloader = load_data(
-            data['train'], data['names'], data['type'], hyp, self.args.img_size, self.args.batch_size, augment=True
+            data['train'], data['names'], data['type'], hyp_cfg, csl, self.args.img_size, self.args.batch_size, augment=True
         )
         num_iters_per_epoch = len(train_dataloader)
 
@@ -140,12 +148,10 @@ class Train:
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
 
-        nw =  max(int((self.args.epochs * num_iters_per_epoch) * hyp['warmup_prop']), 1000)
-        lf = one_cycle(1, hyp['lrf'], int(self.args.epochs))
+        nw =  max(int((self.args.epochs * num_iters_per_epoch) * hyp_cfg['warmup_prop']), 1000)
+        lf = one_cycle(1, hyp_cfg['lrf'], int(self.args.epochs))
         scheduler = LambdaLR(optimizer, lr_lambda=lf)
         initial_lr = optimizer.param_groups[0]['initial_lr']
-
-        compute_loss = ComputeLoss(self.model, hyp)
 
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
@@ -159,7 +165,11 @@ class Train:
             self.model.train()
             total_train_loss = {}
       
-            logger.info(('\n' + '%10s' * 6) % ('Epoch', 'lr', 'box_loss', 'obj_loss', 'cls_loss', 'total'))
+            s = ('\n' + '%10s' * 2) % ('Epoch', 'lr')
+            for name in compute_loss.loss_items.keys():
+                s += ('%12s') % name
+            logger.info(s)
+
             pbar = enumerate(train_dataloader)
             pbar = tqdm.tqdm(pbar, total=len(train_dataloader))
             for batch, (_, imgs, targets) in pbar:
@@ -183,9 +193,10 @@ class Train:
                     optimizer.zero_grad()
                 
                 # print info
-                s = ('%10s'  + '%10.4g' * 5) % (
-                    '%g/%g' % (epoch + 1, self.args.epochs), optimizer.param_groups[0]["lr"], loss_items["reg_loss"],
-                    loss_items["conf_loss"], loss_items["cls_loss"], loss_items["total_loss"])
+                s = ('%10s' + '%10.4g') % ('%g/%g' % (epoch + 1, self.args.epochs), optimizer.param_groups[0]["lr"])
+                for loss in loss_items.values():
+                    s += ('%12.4g') % loss
+
                 # store loss items
                 for item in loss_items:
                     if item in total_train_loss:
@@ -203,7 +214,7 @@ class Train:
             # ------ Valid ------
             # -------------------
             mp, mr, map50, map5095, total_val_loss = test(
-                self.model, compute_loss, self.device, data, hyp, 
+                self.model, compute_loss, self.device, data, hyp_cfg, csl,
                 self.args.img_size, self.args.batch_size * 2, conf_thres=0.001, iou_thres=0.65
             )
 
@@ -232,6 +243,7 @@ if __name__ == "__main__":
     parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
     parser.add_argument("--weights_path", type=str, default="weights/yolov4.pth", help="path to pretrained weights file")
     parser.add_argument("--model_name", type=str, default="trash", help="new model name")
+    parser.add_argument("--mode", default="csl", nargs='?', choices=['csl', 'kfiou'], help="specify a model type")
     parser.add_argument("--data", type=str, default="", help=".yaml path for data")
     parser.add_argument("--config", type=str, default="", help=".yaml path for configs")
 

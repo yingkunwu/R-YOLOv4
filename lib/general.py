@@ -7,9 +7,9 @@ from detectron2.layers.nms import nms_rotated
 def norm_angle(theta):
     """Limit the range of angles.
     Args:
-        theta (Tensor): shape(n,)
+        theta (torch.Tensor): shape(n,)
     Returns:
-        theta (Tensor): shape(n,)
+        theta (torch.Tensor): shape(n,)
     """
     theta = torch.where(theta >= np.pi / 2, theta - np.pi, theta)
     theta = torch.where(theta < -np.pi / 2, theta + np.pi, theta)
@@ -24,9 +24,9 @@ def xywh2xyxy(x):
     """
     Convert (x, y, w, h) to (x1, y1, x2, y2).
     Arguments:
-        x (Tensor): shape(N, 4)
+        x (torch.Tensor): shape(N, 4)
     Returns:
-        y (Tensor): shape(N, 4)
+        y (torch.Tensor): shape(N, 4)
     """
     assert isinstance(x, torch.Tensor), "Input should be torch.tensors."
 
@@ -43,9 +43,9 @@ def xywha2xyxyxyxy(boxes):
     Convert (x, y, w, h, theta) to (x1, y1, x2, y2, x3, y3, x4, y4).
     Note that angle is in radians and positive rotations are clockwise (under image coordinate).
     Arguments:
-        boxes (Tensor): shape(N, 5)
+        boxes (torch.Tensor): shape(N, 5)
     Returns:
-        rboxes (Tensor): shape(N, 4, 2)
+        rboxes (torch.Tensor): shape(N, 4, 2)
     """
     num_samples = boxes.size(0)
     Rs = torch.zeros((num_samples, 2, 3))
@@ -74,9 +74,9 @@ def xyxyxyxy2xywha(boxes):
     It returns a box defined in 180-degrees angular range, meaning that theta is determined by the long side (h) of the rectangle and x-axis.
     Also note that theta is in radians and the positive rotations of theta are clockwise as defined under image coordinate.
     Arguments:
-        boxes (Tensor): shape(N, 8)
+        boxes (torch.Tensor): shape(N, 8)
     Returns:
-        boxes (Tensor): shape(N, 5)
+        boxes (torch.Tensor): shape(N, 5)
     """
     num_samples = boxes.size(0)
     x1, y1, x2, y2, x3, y3, x4, y4 = boxes.unbind(dim=-1)
@@ -104,13 +104,42 @@ def xyxyxyxy2xywha(boxes):
     return torch.stack((x, y, w, h, theta), -1)
 
 
+def xywhr2xywhsigma(xywhr):
+    """Convert oriented bounding box to 2-D Gaussian distribution.
+    Args:
+        xywhr (torch.Tensor): rbboxes with shape (N, 5)
+    Returns:
+        xy (torch.Tensor): center point of 2-D Gaussian distribution with shape (N, 2)
+        wh (torch.Tensor): size of original bboxes
+        sigma (torch.Tensor): covariance matrix of 2-D Gaussian distribution with shape (N, 2, 2)
+    """
+
+    _shape = xywhr.size()
+    assert _shape[-1] == 5
+
+    xy = xywhr[..., :2]
+    wh = xywhr[..., 2:4].clamp(min=1e-7, max=1e7)
+    r = xywhr[..., 4]
+
+    cos_r = torch.cos(r)
+    sin_r = torch.sin(r)
+
+    R = torch.stack((cos_r, -sin_r, sin_r, cos_r), dim=-1).reshape(-1, 2, 2)
+
+    S = (0.5 * torch.diag_embed(wh)).square()
+
+    sigma = R.bmm(S).bmm(R.permute(0, 2, 1)).reshape((_shape[0], 2, 2))
+
+    return xy, wh, sigma
+
+
 def post_process(predictions, conf_thres=0.5, iou_thres=0.4):
     """
     Args:
-        predictions (Tensor): shape(batch size, (grid_size_1^2 + grid_size_1^2, grid_size_3^2) x num_anchors, 6 + num_classes)
+        predictions (torch.Tensor): shape(batch size, (grid_size_1^2 + grid_size_1^2, grid_size_3^2) x num_anchors, 6 + num_classes)
         e.g. : [1, ((52 x 52) + (26 x 26) + (13 x 13)) x 18, 8] with rotated anchors and 416 image size
     Returns:
-        outputs (Tensor): shape(batch size, 7)
+        outputs (torch.Tensor): shape(batch size, 7)
         last dimension-> (x, y, w, h, theta, confidence score, class id)
     """
 

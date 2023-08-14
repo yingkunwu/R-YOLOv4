@@ -6,13 +6,13 @@ from datasets.UCASAOD_dataset import UCASAODDataset
 from datasets.DOTA_dataset import DOTADataset
 
 
-def load_data(data_dir, class_names, dataset_type, hyp, img_size=608, batch_size=4, augment=False, shuffle=True):
+def load_data(data_dir, class_names, dataset_type, hyp, csl, img_size=608, batch_size=4, augment=False, shuffle=True):
     if dataset_type == "UCAS_AOD":
-        dataset = UCASAODDataset(data_dir, class_names, hyp, img_size=img_size, augment=augment)
+        dataset = UCASAODDataset(data_dir, class_names, hyp, img_size=img_size, augment=augment, csl=csl)
     elif dataset_type == "DOTA":
-        dataset = DOTADataset(data_dir, class_names, hyp, img_size=img_size, augment=augment)
+        dataset = DOTADataset(data_dir, class_names, hyp, img_size=img_size, augment=augment, csl=csl)
     elif dataset_type == "custom":
-        dataset = CustomDataset(data_dir, class_names, hyp, img_size=img_size, augment=augment)
+        dataset = CustomDataset(data_dir, class_names, hyp, img_size=img_size, augment=augment, csl=csl)
     else:
         raise NotImplementedError
 
