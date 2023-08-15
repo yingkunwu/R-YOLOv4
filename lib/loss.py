@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .kfloss import KFLoss
+from .gaussian_dist_loss import GDLoss
 
 from lib.general import norm_angle
 
@@ -120,6 +121,7 @@ class ComputeLoss:
         self.lambda_conf_scale = hyp['obj']
         self.lambda_cls_scale = hyp['cls']
         self.kfloss = KFLoss()
+        self.gdloss = GDLoss()
 
         BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([hyp['obj_pw']], device=device))
         BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([hyp['cls_pw']], device=device))
@@ -132,6 +134,7 @@ class ComputeLoss:
         self.BCEobj = BCEobj
         self.BCEcls = BCEcls
         self.gr = 1.0
+        self.delta = 1.0
 
         self.rotated_anchors = model.rotated_anchors
         self.anchors = model.anchors
@@ -174,6 +177,15 @@ class ComputeLoss:
 
                 # reg_loss += (reg_magnitude * reg_vector).mean()
                 reg, xy, kf, KFIoU = self.kfloss(pbbox[obj_mask], tbbox[obj_mask])
+
+                GDLoss = self.gdloss(pbbox[obj_mask], tbbox[obj_mask])
+                #TODO Riou
+                riou_o = None
+
+                Vp = self.delta * GDLoss
+                alpha  = Vp / ( Vp - riou_o + 1)
+
+                riou = riou_o - alpha * Vp
 
                 score_iou = KFIoU.detach().clamp(0).type(tconf.dtype)
                 tconf[obj_mask] = (1.0 - self.gr) + self.gr * score_iou  # iou ratio
@@ -225,6 +237,7 @@ class ComputeLoss:
         # Get anchors with best iou and their angle difference with ground truths
         ious = []
         diffs = []
+
         with torch.no_grad():
             for i in range(0, len(anchors), 2):
                 anchor = anchors[i:i + 2]
@@ -235,8 +248,8 @@ class ComputeLoss:
                 diffs.append(diff)
             ious = torch.stack(ious)
             diffs = torch.stack(diffs)
-        _, best_i = ious.max(0)
-        _, best_d = diffs.max(0)
+        _, best_i = ious.max(0) #choose the anchor first
+        _, best_d = diffs.max(0) #then choose the angle
         best_n = best_i * 6 + best_d
 
         # Separate target values
