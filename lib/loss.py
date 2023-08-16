@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .kfloss import KFLoss
 from .gaussian_dist_loss import GDLoss
+from detectron2.layers.rotated_boxes import pairwise_iou_rotated
 
 from lib.general import norm_angle
 
@@ -121,7 +122,7 @@ class ComputeLoss:
         self.lambda_conf_scale = hyp['obj']
         self.lambda_cls_scale = hyp['cls']
         self.kfloss = KFLoss()
-        self.gdloss = GDLoss()
+        self.gdloss = GDLoss(reduction = "none")
 
         BCEobj = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([hyp['obj_pw']], device=device))
         BCEcls = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([hyp['cls_pw']], device=device))
@@ -133,8 +134,7 @@ class ComputeLoss:
 
         self.BCEobj = BCEobj
         self.BCEcls = BCEcls
-        self.gr = 1.0
-        self.delta = 1.0
+        self.delta = 0.4
 
         self.rotated_anchors = model.rotated_anchors
         self.anchors = model.anchors
@@ -180,21 +180,18 @@ class ComputeLoss:
 
                 GDLoss = self.gdloss(pbbox[obj_mask], tbbox[obj_mask])
                 #TODO Riou
-                riou_o = None
+                riou_o, _ = pairwise_iou_rotated(pbbox[obj_mask], tbbox[obj_mask]).max(1)
 
                 Vp = self.delta * GDLoss
                 alpha  = Vp / ( Vp - riou_o + 1)
-
-                riou = riou_o - alpha * Vp
-
-                score_iou = KFIoU.detach().clamp(0).type(tconf.dtype)
-                tconf[obj_mask] = (1.0 - self.gr) + self.gr * score_iou  # iou ratio
+                riou = (riou_o - alpha * Vp).clamp(0)  # rotated intersection over union
+                tconf[obj_mask] = riou
 
                 reg_loss += reg
                 xy_loss += xy 
                 kf_loss += kf 
 
-                # Focal Loss for object's prediction
+                # BCE Loss for object's prediction
                 conf_loss += self.BCEobj(pconf[obj_mask], tconf[obj_mask])
 
                 # Binary Cross Entropy Loss for class' prediction

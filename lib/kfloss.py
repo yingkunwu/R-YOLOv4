@@ -87,7 +87,7 @@ class KFLoss(nn.Module):
 
         K = Sigma_p.bmm((Sigma_p + Sigma_t).inverse())
         Sigma = Sigma_p - K.bmm(Sigma_p)
-        
+        Sigma = torch.where(torch.isnan(Sigma), torch.full_like(Sigma, 0), Sigma)
         #Vb = 4 * Sigma.det().sqrt()
         eig = torch.linalg.eigvals(Sigma)
         Vb = 4 * torch.sqrt((eig[:, 0] * eig[:, 1]).real)

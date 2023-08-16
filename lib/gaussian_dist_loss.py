@@ -1,5 +1,3 @@
-# Copyright (c) SJTU. All rights reserved.
-from copy import deepcopy
 import torch
 from torch import nn
 from .kfloss import xy_wh_r_2_xy_sigma
@@ -92,7 +90,8 @@ class GDLoss(nn.Module):
                  tau=0.0,
                  alpha=1.0,
                  reduction='mean',
-                 loss_weight=1.0):
+                 loss_weight=1.0,
+                 normalize = True):
         super(GDLoss, self).__init__()
         assert reduction in ['none', 'sum', 'mean']
         assert fun in ['log1p', 'none', 'sqrt']
@@ -102,6 +101,7 @@ class GDLoss(nn.Module):
         self.alpha = alpha
         self.reduction = reduction
         self.loss_weight = loss_weight
+        self.normalize = normalize
 
     def forward(self,
                 pred,
@@ -143,7 +143,7 @@ class GDLoss(nn.Module):
 
         distance = (xy_distance + self.alpha * self.alpha * whr_distance).clamp(1e-7).sqrt()
 
-        if normalize:
+        if self.normalize:
             scale = 2 * (
                 _t_det_sqrt.clamp(1e-7).sqrt().clamp(1e-7).sqrt()).clamp(1e-7)
             distance = distance / scale
