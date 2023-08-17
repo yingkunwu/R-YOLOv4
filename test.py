@@ -121,7 +121,7 @@ def get_batch_statistics(outputs, targets, iouv, niou):
         if nl:
             detected_boxes = []
             target_labels = tar[:, 0]
-            target_boxes = tar[:, 1:6].type(pred_boxes.dtype)
+            target_boxes = tar[:, 1:6]
 
             # convert radians to degrees
             pred_boxes[:, 4] = pred_boxes[:, 4] / np.pi * 180
@@ -169,7 +169,7 @@ def test(model, compute_loss, device, data, hyp, csl_labels, img_size, batch_siz
 
     # Get dataloader
     test_dataset, test_dataloader = load_data(
-        data['test'], data['names'], data['type'], hyp, csl_labels, img_size, batch_size, shuffle=False
+        data['val'], data['names'], data['type'], hyp, csl_labels, img_size, batch_size, shuffle=False
     )
 
     logger.info("Compute mAP...")

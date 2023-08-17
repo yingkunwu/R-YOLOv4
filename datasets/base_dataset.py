@@ -133,7 +133,7 @@ class BaseDataset(Dataset):
             img, targets = vertical_flip(img, targets)
 
         # prepare empty labels if the number of targets are 0
-        labels = torch.zeros((0, 187)) if self.csl else torch.zeros((0, 7))
+        labels = torch.zeros((0, 187), dtype=torch.float32) if self.csl else torch.zeros((0, 7), dtype=torch.float32)
 
         if len(targets):
             # convert poly bboxes to oriented bboxes
@@ -145,7 +145,7 @@ class BaseDataset(Dataset):
                     angle = rboxes[i, 4] * 180 / np.pi + 90
                     csl_label = gaussian_label(label=angle, num_class=180, u=0, sig=6)
                     csl_labels.append(csl_label)
-                csl_labels = torch.from_numpy(np.stack(csl_labels))
+                csl_labels = torch.from_numpy(np.stack(csl_labels)).type(torch.float32)
 
                 labels = torch.cat((targets[:, :2], rboxes, csl_labels), -1)
             else:

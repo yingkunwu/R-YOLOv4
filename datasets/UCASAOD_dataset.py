@@ -44,9 +44,9 @@ class UCASAODDataset(BaseDataset):
             y4 = torch.tensor(y4)
             labels = torch.tensor(labels)
 
-            polys = torch.stack((x1, y1, x2, y2, x3, y3, x4, y4), -1)
+            polys = torch.stack((x1, y1, x2, y2, x3, y3, x4, y4), -1).type(torch.float32)
 
         else:
-            polys = torch.zeros((0, 8))
+            polys = torch.zeros((0, 8), dtype=torch.float32)
 
         return polys, labels

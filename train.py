@@ -68,20 +68,22 @@ class Train:
         os.makedirs(os.path.join(self.model_path, "logs"))
 
     def load_model(self, n_classes, model_config, mode):
-        pretrained_dict = torch.load(self.args.weights_path)
         self.model = Yolo(n_classes, model_config, mode)
         self.model = self.model.to(self.device)
-        model_dict = self.model.state_dict()
-
-        # 1. filter out unnecessary keys
-        # 第552項開始為yololayer，訓練時不需要用到
-        # pretrained_dict = {k: v for k, v in pretrained_dict.items() if np.shape(model_dict[k]) == np.shape(v)}
-        pretrained_dict = {k: v for i, (k, v) in enumerate(pretrained_dict.items()) if i < 552}
-        # 2. overwrite entries in the existing state dict
-        model_dict.update(pretrained_dict)
-        # 3. load the new state dict
         self.model.apply(weights_init_normal)  # 權重初始化
-        self.model.load_state_dict(model_dict)
+
+        if len(self.args.weights_path):
+            logger.info("Loading pretrained weights from: {}".format(self.args.weights_path))
+            # 1. filter out unnecessary keys
+            # 第552項開始為yololayer，訓練時不需要用到
+            # pretrained_dict = {k: v for k, v in pretrained_dict.items() if np.shape(model_dict[k]) == np.shape(v)}
+            pretrained_dict = torch.load(self.args.weights_path)
+            pretrained_dict = {k: v for i, (k, v) in enumerate(pretrained_dict.items()) if i < 552}
+            # 2. overwrite entries in the existing state dict
+            model_dict = self.model.state_dict()
+            model_dict.update(pretrained_dict)
+            # 3. load the new state dict
+            self.model.load_state_dict(model_dict)
 
     def save_model(self, weightname):
         save_folder = os.path.join(self.model_path, "{}.pth".format(weightname))
@@ -116,6 +118,8 @@ class Train:
         self.logger.list_of_scalars_summary(tensorboard_log, epoch)
 
     def train(self):
+        init()
+
         # load data info
         with open(self.args.data, "r") as stream:
             data = yaml.safe_load(stream)
@@ -146,7 +150,12 @@ class Train:
         nbs = 64  # nominal batch size
         accumulate = max(round(nbs / self.args.batch_size), 1)  # accumulate loss before optimizing
 
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
+        if self.args.optimizer == "Adam":
+            optimizer = torch.optim.Adam(self.model.parameters(), lr=self.args.lr)
+        elif self.args.optimizer == "SGD":
+            optimizer = torch.optim.SGD(self.model.parameters(), lr=self.args.lr, momentum=0.937, nesterov=True)
+        else:
+            raise NotImplementedError("The specified optimizer is not implemented.")
 
         nw =  max(int((self.args.epochs * num_iters_per_epoch) * hyp_cfg['warmup_prop']), 1000)
         lf = one_cycle(1, hyp_cfg['lrf'], int(self.args.epochs))
@@ -238,10 +247,11 @@ class Train:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--epochs", type=int, default=80, help="number of epochs")
-    parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
+    parser.add_argument("--optimizer", default="SGD", nargs='?', choices=['Adam', 'SGD'], help="specify a optimizer for training")
+    parser.add_argument("--lr", type=float, default=0.01, help="learning rate")
     parser.add_argument("--batch_size", type=int, default=4, help="size of batches")
     parser.add_argument("--img_size", type=int, default=608, help="size of each image dimension")
-    parser.add_argument("--weights_path", type=str, default="weights/yolov4.pth", help="path to pretrained weights file")
+    parser.add_argument("--weights_path", type=str, default="", help="path to pretrained weights file")
     parser.add_argument("--model_name", type=str, default="trash", help="new model name")
     parser.add_argument("--mode", default="csl", nargs='?', choices=['csl', 'kfiou'], help="specify a model type")
     parser.add_argument("--data", type=str, default="", help=".yaml path for data")

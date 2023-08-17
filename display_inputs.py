@@ -13,10 +13,10 @@ if __name__ == "__main__":
         config = yaml.safe_load(stream)
 
     # load data info
-    with open("data/UCAS_AOD.yaml", "r") as stream:
+    with open("data/DOTA.yaml", "r") as stream:
         data = yaml.safe_load(stream)
     
-    train_dataset, train_dataloader = load_data(data['train'], data['names'], data['type'], config["hyp"], 608, 1, augment=True)
+    train_dataset, train_dataloader = load_data(data['train'], data['names'], data['type'], config["hyp"], False, 608, 1, augment=True)
 
     for i, (img_path, imgs, targets) in enumerate(train_dataloader):
         print(targets)

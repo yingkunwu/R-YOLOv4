@@ -215,7 +215,6 @@ class ComputeCSLLoss:
                 pwh = torch.exp(out[..., 2:4]) * anchor_wh
                 pbbox = torch.cat((pxy, pwh), -1)  # predicted box
 
-                pconf = out[..., 4] # objectness score
                 pcls = out[..., 5:5 + self.nc] # confidence score of classses
                 pg = out[..., 5 + self.nc:]
 
@@ -232,7 +231,7 @@ class ComputeCSLLoss:
                 cls_loss += self.BCEcls(pcls[obj_mask], tcls[obj_mask])
 
             # Focal Loss for object's prediction
-            conf_loss += self.BCEobj(pconf, tconf)
+            conf_loss += self.BCEobj(out[..., 4], tconf) # objectness score
 
         # Loss scaling
         reg_loss = self.lambda_coord * reg_loss
@@ -256,10 +255,10 @@ class ComputeCSLLoss:
 
     def build_targets(self, target, anchors, nB, nA, nG, nC, device):
         # Output tensors
-        obj_mask = torch.zeros((nB, nA, nG, nG), device=device, dtype=torch.float64)
-        tbbox = torch.zeros((nB, nA, nG, nG, 4), device=device, dtype=torch.float64)
-        tcls = torch.zeros((nB, nA, nG, nG, nC), device=device, dtype=torch.float64)
-        tg = torch.zeros((nB, nA, nG, nG, 180), device=device, dtype=torch.float64)
+        obj_mask = torch.zeros((nB, nA, nG, nG), device=device, dtype=torch.float32)
+        tbbox = torch.zeros((nB, nA, nG, nG, 4), device=device, dtype=torch.float32)
+        tcls = torch.zeros((nB, nA, nG, nG, nC), device=device, dtype=torch.float32)
+        tg = torch.zeros((nB, nA, nG, nG, 180), device=device, dtype=torch.float32)
 
         # Convert ground truth position to position that relative to the size of box (grid size)
         # target_boxes (x, y, w, h), originally normalize w.r.t grids
@@ -398,10 +397,10 @@ class ComputeKFIoULoss:
 
     def build_targets(self, target, anchors, nB, nA, nG, nC, device):
         # Output tensors
-        obj_mask = torch.zeros((nB, nA, nG, nG), device=device)
-        noobj_mask = torch.ones((nB, nA, nG, nG), device=device)
-        tbbox = torch.zeros((nB, nA, nG, nG, 5), device=device)
-        tcls = torch.zeros((nB, nA, nG, nG, nC), device=device)
+        obj_mask = torch.zeros((nB, nA, nG, nG), device=device, dtype=torch.float32)
+        noobj_mask = torch.ones((nB, nA, nG, nG), device=device, dtype=torch.float32)
+        tbbox = torch.zeros((nB, nA, nG, nG, 5), device=device, dtype=torch.float32)
+        tcls = torch.zeros((nB, nA, nG, nG, nC), device=device, dtype=torch.float32)
 
         # target_boxes (x, y, w, h), originally normalize w.r.t grids
         # Convert ground truth position to position that relative to the size of box (grid size)
