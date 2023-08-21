@@ -31,29 +31,32 @@ class Head(nn.Module):
         self.conv17 = Conv(512, 1024, 3, 1, 'leaky')
         self.conv18 = Conv(1024, output_ch, 1, 1, 'linear', bn=False, bias=True)
 
-    def forward(self, input1, input2, input3):
-        x1 = self.conv1(input1)
-        x2 = self.conv2(x1)
-        x3 = self.conv3(input1)
-        # R -1 -16
-        x3 = torch.cat([x3, input2], dim=1)
-        x4 = self.conv4(x3)
-        x5 = self.conv5(x4)
-        x6 = self.conv6(x5)
-        x7 = self.conv7(x6)
-        x8 = self.conv8(x7)
-        x9 = self.conv9(x8)
-        x10 = self.conv10(x9)
-        # R -4
-        x11 = self.conv11(x8)
-        # R -1 -37
-        x11 = torch.cat([x11, input3], dim=1)
-        x12 = self.conv12(x11)
-        x13 = self.conv13(x12)
-        x14 = self.conv14(x13)
-        x15 = self.conv15(x14)
-        x16 = self.conv16(x15)
-        x17 = self.conv17(x16)
-        x18 = self.conv18(x17)
+    def forward(self, x3, x2, x1):
+        out3 = self.conv1(x3)
+        out3 = self.conv2(out3)
 
-        return x2, x10, x18
+        x3 = self.conv3(x3)
+        x3 = torch.cat([x3, x2], dim=1)
+
+        x3 = self.conv4(x3)
+        x3 = self.conv5(x3)
+        x3 = self.conv6(x3)
+        x3 = self.conv7(x3)
+        x3 = self.conv8(x3)
+
+        out2 = self.conv9(x3)
+        out2 = self.conv10(out2)
+
+        x3 = self.conv11(x3)
+        x1 = torch.cat([x1, x3], dim=1)
+
+        x1 = self.conv12(x1)
+        x1 = self.conv13(x1)
+        x1 = self.conv14(x1)
+        x1 = self.conv15(x1)
+        x1 = self.conv16(x1)
+
+        x1 = self.conv17(x1)
+        out1 = self.conv18(x1)
+
+        return out3, out2, out1
