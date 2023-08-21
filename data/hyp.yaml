@@ -4,13 +4,12 @@ model:
     - [12,16, 19,36, 40,28]
     - [36,75, 76,55, 72,146]
     - [142,110, 192,243, 459,401]
-  angles: [-60, -30, 0, 30, 60, 90]
+  angles: [-90, -60, -30, 0, 30, 60]
 
 # Hyperparameters
 hyp:
   # For training
   fl_gamma: 2.0  # focal loss gamma (efficientDet default gamma=1.5)
-  ignore_thresh: 0.7 # threshold to ignore training negative samples
   box: 0.05  # box loss gain
   obj: 1.0  # obj loss gain
   obj_pw: 1.0

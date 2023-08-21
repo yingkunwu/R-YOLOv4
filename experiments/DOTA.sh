@@ -1,1 +1,0 @@
-python train.py --data_folder data/DOTA --model_name DOTA --number_of_classes 16 --batch_size 2 --img_size 800 --sample_size 600 --dataset DOTA --no_multiscale

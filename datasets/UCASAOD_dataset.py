@@ -9,8 +9,8 @@ from .base_dataset import BaseDataset
 
 
 class UCASAODDataset(BaseDataset):
-    def __init__(self, data_dir, class_names, hyp, augment=False, img_size=416, normalized_labels=False):
-        super().__init__(hyp, img_size, augment, normalized_labels)
+    def __init__(self, data_dir, class_names, hyp, augment, img_size, csl, normalized_labels=False):
+        super().__init__(hyp, img_size, augment, csl, normalized_labels)
         self.img_files = sorted(glob.glob(os.path.join(data_dir, "*.png")))
         self.label_files = [path.replace(".png", ".txt") for path in self.img_files]
         self.category = {}
@@ -44,9 +44,9 @@ class UCASAODDataset(BaseDataset):
             y4 = torch.tensor(y4)
             labels = torch.tensor(labels)
 
-            polys = torch.stack((x1, y1, x2, y2, x3, y3, x4, y4), -1)
+            polys = torch.stack((x1, y1, x2, y2, x3, y3, x4, y4), -1).type(torch.float32)
 
         else:
-            polys = torch.zeros((0, 8))
+            polys = torch.zeros((0, 8), dtype=torch.float32)
 
         return polys, labels

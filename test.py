@@ -8,7 +8,7 @@ from detectron2.layers.rotated_boxes import pairwise_iou_rotated
 
 from lib.general import post_process
 from lib.load import load_data
-from lib.loss import ComputeLoss
+from lib.loss import ComputeCSLLoss, ComputeKFIoULoss
 from lib.logger import logger
 from model.yolo import Yolo
 
@@ -121,7 +121,7 @@ def get_batch_statistics(outputs, targets, iouv, niou):
         if nl:
             detected_boxes = []
             target_labels = tar[:, 0]
-            target_boxes = tar[:, 1:]
+            target_boxes = tar[:, 1:6]
 
             # convert radians to degrees
             pred_boxes[:, 4] = pred_boxes[:, 4] / np.pi * 180
@@ -164,12 +164,12 @@ def calculate_eval_stats(stats, num_classes):
     return nt, p, r, ap50, ap, f1, ap_class, mp, mr, map50, map
 
 
-def test(model, compute_loss, device, data, hyp, img_size, batch_size, conf_thres, iou_thres):
+def test(model, compute_loss, device, data, hyp, csl_labels, img_size, batch_size, conf_thres, iou_thres):
     model.eval()
 
     # Get dataloader
     test_dataset, test_dataloader = load_data(
-        data['test'], data['names'], data['type'], hyp, img_size, batch_size, shuffle=False
+        data['val'], data['names'], data['type'], hyp, csl_labels, img_size, batch_size, shuffle=False
     )
 
     logger.info("Compute mAP...")
@@ -228,12 +228,12 @@ class Test:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
 
-    def load_model(self, n_classes, model_config):
+    def load_model(self, n_classes, model_config, mode):
         if not os.path.isfile(self.args.weight_path):
             logger.error("Model weight not found.")
             exit(1)
         pretrained_dict = torch.load(self.args.weight_path, map_location=torch.device('cpu'))
-        self.model = Yolo(n_classes, model_config)
+        self.model = Yolo(n_classes, model_config, mode)
         self.model = self.model.to(self.device)
         self.model.load_state_dict(pretrained_dict)
 
@@ -241,23 +241,30 @@ class Test:
         # load hyperparameters
         with open(self.args.hyp, "r") as stream:
             config = yaml.safe_load(stream)
-        hyp = config['hyp']
+
+        model_cfg, hyp_cfg = config['model'], config['hyp']
 
         # load data info
         with open(self.args.data, "r") as stream:
             data = yaml.safe_load(stream)
 
-        self.load_model(len(data["names"]), config['model'])
+        self.load_model(len(data["names"]), model_cfg, self.args.mode)
 
-        compute_loss = ComputeLoss(self.model, hyp)
+        if self.args.mode == "csl":
+            csl = True
+            compute_loss = ComputeCSLLoss(self.model, hyp_cfg)
+        else:
+            csl = False
+            compute_loss = ComputeKFIoULoss(self.model, hyp_cfg)
 
-        test(self.model, compute_loss, self.device, data, hyp, 
+        test(self.model, compute_loss, self.device, data, hyp_cfg, csl,
                 self.args.img_size, self.args.batch_size, self.args.conf_thres, self.args.iou_thres)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--weight_path", type=str, default="", help="file path to load model weight")
+    parser.add_argument("--mode", default="csl", nargs='?', choices=['csl', 'kfiou'], help="specify a model type")
     parser.add_argument("--conf_thres", type=float, default=0.001, help="object confidence threshold")
     parser.add_argument("--iou_thres", type=float, default=0.65, help="iou thresshold for non-maximum suppression")
     parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")

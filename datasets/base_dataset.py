@@ -10,6 +10,27 @@ from lib.augmentations import hsv, vertical_flip, horizontal_flip, mixup, random
 from lib.general import xyxyxyxy2xywha
 
 
+def gaussian_label(label, num_class, u=0, sig=4.0):
+    """
+    ref: https://github.com/hukaixuan19970627/yolov5_obb/blob/master/utils/rboxs_utils.py
+
+    Convert to CSL Labels:
+        CSL map the class of each angle into gaussian distribution to handle the periodicity of the angle 
+        and increase the error tolerance to adjacent angles
+    Args:
+        label (float32):[1], theta class
+        num_theta_class (int): [1], theta class num
+        u (float32):[1], mean in gaussian function
+        sig (float32):[1], std in gaussian function, which is window radius for Circular Smooth Label
+    Returns:
+        csl_label (array): [num_theta_class], gaussian function smooth label
+    """
+    x = np.arange(-num_class/2, num_class/2)
+    y_sig = np.exp(-(x - u) ** 2 / (2 * sig ** 2))
+    index = int(num_class/2 - label)
+    return np.concatenate([y_sig[index:], y_sig[:index]], axis=0)
+
+
 def pad_to_square(img, new_shape, pad_value):
     shape = img.shape[:2]
 
@@ -60,11 +81,12 @@ class ImageDataset(Dataset):
         return img_path, img
 
 class BaseDataset(Dataset):
-    def __init__(self, hyp, img_size=608, augment=False, normalized_labels=False):
+    def __init__(self, hyp, img_size, augment, csl, normalized_labels):
         self.hyp = hyp
         self.img_size = img_size
         self.augment = augment
         self.normalized_labels = normalized_labels
+        self.csl = csl
         self.mosaic_border = [-img_size // 2, -img_size // 2]
 
     def __getitem__(self, index):
@@ -110,9 +132,24 @@ class BaseDataset(Dataset):
         if self.augment and np.random.random() < self.hyp['flipud']:
             img, targets = vertical_flip(img, targets)
 
-        # convert poly bboxes to oriented bboxes
-        rboxes = xyxyxyxy2xywha(targets[:, 2:])
-        labels = torch.cat((targets[:, :2], rboxes), -1)
+        # prepare empty labels if the number of targets are 0
+        labels = torch.zeros((0, 187), dtype=torch.float32) if self.csl else torch.zeros((0, 7), dtype=torch.float32)
+
+        if len(targets):
+            # convert poly bboxes to oriented bboxes
+            rboxes = xyxyxyxy2xywha(targets[:, 2:])
+
+            if self.csl:
+                csl_labels = []
+                for i in range(len(rboxes)):
+                    angle = rboxes[i, 4] * 180 / np.pi + 90
+                    csl_label = gaussian_label(label=angle, num_class=180, u=0, sig=6)
+                    csl_labels.append(csl_label)
+                csl_labels = torch.from_numpy(np.stack(csl_labels)).type(torch.float32)
+
+                labels = torch.cat((targets[:, :2], rboxes, csl_labels), -1)
+            else:
+                labels = torch.cat((targets[:, :2], rboxes), -1)
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1] # BGR to RGB

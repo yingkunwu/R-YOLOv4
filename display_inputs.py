@@ -13,23 +13,23 @@ if __name__ == "__main__":
         config = yaml.safe_load(stream)
 
     # load data info
-    with open("data/UCAS_AOD.yaml", "r") as stream:
+    with open("data/DOTA.yaml", "r") as stream:
         data = yaml.safe_load(stream)
     
-    train_dataset, train_dataloader = load_data(data['train'], data['names'], data['type'], config["hyp"], 608, 1, augment=True)
+    train_dataset, train_dataloader = load_data(data['train'], data['names'], data['type'], config["hyp"], False, 608, 1, augment=True)
 
     for i, (img_path, imgs, targets) in enumerate(train_dataloader):
         print(targets)
         img = imgs.squeeze(0).numpy().transpose(1, 2, 0)
         img = cv.cvtColor(img, cv.COLOR_RGB2BGR)
-        targets = np.array(targets)
 
-        for p in targets:
-            x, y, w, h, theta = p[2] * img.shape[1], p[3] * img.shape[1], p[4] * img.shape[1], p[5] * img.shape[1], p[6]
-
-            bbox = xywha2xyxyxyxy((x, y, w, h, theta))
-            bbox = np.int0(bbox)
-            cv.drawContours(img, [bbox], 0, (255, 0, 0), 1)
+        if targets.size(0):
+            boxes = targets[:, 2:]
+            boxes[:, :4] *= img.shape[1]
+            polys = xywha2xyxyxyxy(boxes)
+            polys = np.array(polys, dtype=np.intp)
+            for poly in polys:
+                cv.drawContours(img, [poly], 0, (255, 0, 0), 1)
 
         cv.imshow('My Image', img)
         cv.waitKey(0)
