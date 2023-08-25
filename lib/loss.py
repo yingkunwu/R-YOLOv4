@@ -30,20 +30,6 @@ class FocalLoss(nn.Module):
             return loss.sum()
         else:  # 'none'
             return loss
-    
-
-def anchor_wh_iou(wh1, wh2):
-    """
-    :param wh1: width and height of ground truth boxes
-    :param wh2: width and height of anchor boxes
-    :return: iou
-    """
-    wh2 = wh2.t()
-    w1, h1 = wh1[0], wh1[1]
-    w2, h2 = wh2[0], wh2[1]
-    inter_area = torch.min(w1, w2) * torch.min(h1, h2)
-    union_area = (w1 * h1 + 1e-16) + w2 * h2 - inter_area
-    return inter_area / union_area
 
 
 def bbox_xywha_ciou(pred_boxes, target_boxes):
@@ -362,7 +348,7 @@ class ComputeKFIoULoss:
         # initializing loss
         reg_loss, conf_loss, cls_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
 
-        tcls, tbbox, indices, anchors = self.build_targets2(outputs, target)
+        tcls, tbbox, indices, anchors = self.build_targets(outputs, target)
 
         for i, pi in enumerate(outputs):
             b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
@@ -417,66 +403,7 @@ class ComputeKFIoULoss:
 
         return loss, self.loss_items
 
-    def build_targets(self, target, anchors, nB, nA, nG, nC, device):
-        # Output tensors
-        obj_mask = torch.zeros((nB, nA, nG, nG), device=device, dtype=torch.float32)
-        noobj_mask = torch.ones((nB, nA, nG, nG), device=device, dtype=torch.float32)
-        tbbox = torch.zeros((nB, nA, nG, nG, 5), device=device, dtype=torch.float32)
-        tcls = torch.zeros((nB, nA, nG, nG, nC), device=device, dtype=torch.float32)
-
-        # target_boxes (x, y, w, h), originally normalize w.r.t grids
-        # Convert ground truth position to position that relative to the size of box (grid size)
-        gxy = target[:, 2:4] * nG
-        gwh = target[:, 4:6] * nG
-        ga = target[:, 6]
-
-        # Get anchors with best iou and their angle difference with ground truths
-        ious = []
-        diffs = []
-        with torch.no_grad():
-            for i in range(3):
-                anchor = anchors[i * 6, :2]
-                iou = anchor_wh_iou(anchor, gwh)
-                ious.append(iou)
-            for i in range(6):
-                angle = anchors[i, 2]
-                diff = torch.abs(torch.cos(angle - ga))
-                diffs.append(diff)
-            ious = torch.stack(ious)
-            diffs = torch.stack(diffs)
-        _, best_i = ious.max(0)
-        _, best_d = diffs.max(0)
-        best_n = best_i * 6 + best_d
-
-        # Separate target values
-        # b indicates which batch, target_labels is the class label (0 or 1)
-        b, target_labels = target[:, :2].long().t()
-        gij = gxy.long()
-        gi, gj = gij.t()
-
-        # Avoid the error caused by the wrong position of the center coordinate of objects
-        gi = torch.clamp(gi, 0, nG - 1)
-        gj = torch.clamp(gj, 0, nG - 1)
-
-        # get target offest from best matched anchor boxes
-        ga = norm_angle(ga - anchors[best_n][:, 2])
-
-        # Bounding Boxes
-        tbbox[b, best_n, gj, gi] = torch.cat((gxy - gij, gwh, ga.unsqueeze(-1)), -1)
-
-        # One-hot encoding of label
-        tcls[b, best_n, gj, gi, target_labels] = 1
-
-        # Set masks to specify object's location, for img the row is y and col is x
-        obj_mask[b, best_n, gj, gi] = 1
-        noobj_mask[b, best_n, gj, gi] = 0
-
-        obj_mask = obj_mask.type(torch.bool)
-        noobj_mask = noobj_mask.type(torch.bool)
-
-        return obj_mask, noobj_mask, tbbox, tcls
-
-    def build_targets2(self, p, targets):
+    def build_targets(self, p, targets):
         # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
         na, nt = self.na, targets.shape[0]  # number of anchors, targets
         tcls, tbox, indices, anch = [], [], [], []
