@@ -36,14 +36,14 @@ class YoloCSLLayer(nn.Module):
                 anchors = torch.tensor(self.anchors[i], device=device)
                 anchor_wh = anchors[:, :2].view([1, na, 1, 1, 2])
 
-                y = out[i]
+                y = out[i].sigmoid()
 
                 # Eliminate grid sensitivity: pred_xy = 2 * (pred_xy - 0.5) + 0.5 (shifting center and scaling)
-                pxy = (y[..., 0:2].sigmoid() * 2 - 0.5 + grid_xy) * self.stride[i]
-                pwh = torch.exp(y[..., 2:4]) * anchor_wh * self.stride[i]
-                pconf = y[..., 4:5].sigmoid() # objectness score
-                pcls = y[..., 5:5 + self.nc].sigmoid() # confidence score of classses
-                pa = y[..., 5 + self.nc:].sigmoid() # theta classes score
+                pxy = (y[..., 0:2] * 2 - 0.5 + grid_xy) * self.stride[i]
+                pwh = (y[..., 2:4] * 2) ** 2 * anchor_wh * self.stride[i]
+                pconf = y[..., 4:5] # objectness score
+                pcls = y[..., 5:5 + self.nc] # confidence score of classses
+                pa = y[..., 5 + self.nc:] # theta classes score
 
                 _, ptheta = torch.max(pa, 4, keepdim=True) # θ ∈ int[0, 179]
                 ptheta = (ptheta - 90) / 180 * np.pi # θ ∈ [-pi/2, pi/2)
