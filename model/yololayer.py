@@ -36,14 +36,14 @@ class YoloCSLLayer(nn.Module):
                 anchors = torch.tensor(self.anchors[i], device=device)
                 anchor_wh = anchors[:, :2].view([1, na, 1, 1, 2])
 
-                y = out[i]
+                y = out[i].sigmoid()
 
                 # Eliminate grid sensitivity: pred_xy = 2 * (pred_xy - 0.5) + 0.5 (shifting center and scaling)
-                pxy = (y[..., 0:2].sigmoid() * 2 - 0.5 + grid_xy) * self.stride[i]
-                pwh = torch.exp(y[..., 2:4]) * anchor_wh * self.stride[i]
-                pconf = y[..., 4:5].sigmoid() # objectness score
-                pcls = y[..., 5:5 + self.nc].sigmoid() # confidence score of classses
-                pa = y[..., 5 + self.nc:].sigmoid() # theta classes score
+                pxy = (y[..., 0:2] * 2 - 0.5 + grid_xy) * self.stride[i]
+                pwh = (y[..., 2:4] * 2) ** 2 * anchor_wh * self.stride[i]
+                pconf = y[..., 4:5] # objectness score
+                pcls = y[..., 5:5 + self.nc] # confidence score of classses
+                pa = y[..., 5 + self.nc:] # theta classes score
 
                 _, ptheta = torch.max(pa, 4, keepdim=True) # θ ∈ int[0, 179]
                 ptheta = (ptheta - 90) / 180 * np.pi # θ ∈ [-pi/2, pi/2)
@@ -88,14 +88,14 @@ class YoloKFIoULayer(nn.Module):
                 anchor_wh = anchors[:, :2].view([1, na, 1, 1, 2])
                 anchor_a = anchors[:, 2].view([1, na, 1, 1, 1])
 
-                y = out[i]
+                y = out[i].sigmoid()
 
                 # Eliminate grid sensitivity: pred_xy = 2 * (pred_xy - 0.5) + 0.5 (shifting center and scaling)
-                pxy = (y[..., 0:2].sigmoid() * 2 - 0.5 + grid_xy) * self.stride[i]
-                pwh = torch.exp(y[..., 2:4]) * anchor_wh * self.stride[i]
-                pa = (y[..., 4:5].sigmoid() - 0.5) * 0.5236 + anchor_a
-                pconf = y[..., 5:6].sigmoid() # objectness score
-                pcls = y[..., 6:].sigmoid() # confidence score of classses
+                pxy = (y[..., 0:2] * 2 - 0.5 + grid_xy) * self.stride[i]
+                pwh = (y[..., 2:4] * 2) ** 2 * anchor_wh * self.stride[i]
+                pa = (y[..., 4:5] - 0.5) * 0.5236 + anchor_a
+                pconf = y[..., 5:6] # objectness score
+                pcls = y[..., 6:] # confidence score of classses
 
                 y = torch.cat((pxy, pwh, pa, pconf, pcls), -1)
                 y = y.view(bs, -1, self.nc + 6)
