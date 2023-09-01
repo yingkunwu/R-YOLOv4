@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from lib.general import xywhr2xywhsigma, norm_angle
+from lib.general import xywhr2xywhrsigma, norm_angle
 
 
 class FocalLoss(nn.Module):
@@ -32,7 +32,7 @@ class FocalLoss(nn.Module):
             return loss
 
 
-def bbox_xywha_ciou(pred_boxes, target_boxes):
+def bbox_ciou(pred_boxes, target_boxes):
     # Reference: https://github.com/Zzh-tju/DIoU-SSD-pytorch/blob/86a370aa2cadea6ba7e5dffb2efc4bacc4c863ea/
     #            utils/box/box_utils.py#L47
     """
@@ -90,7 +90,7 @@ class KFLoss(nn.Module):
         loss (torch.Tensor)
     """
 
-    def __init__(self, fun='ln', alpha=3.0):
+    def __init__(self, fun='exp', alpha=3.0):
         super(KFLoss, self).__init__()
         assert fun in ['none', 'ln', 'exp']
         self.fun = fun
@@ -105,28 +105,37 @@ class KFLoss(nn.Module):
             loss (torch.Tensor)
             KFIoU (torch.Tensor)
         """
-        xy_p, wh_p, Sigma_p = xywhr2xywhsigma(pred)
-        xy_t, wh_t, Sigma_t = xywhr2xywhsigma(target)
+        xy_p, wh_p, r_p, Sigma_p = xywhr2xywhrsigma(pred)
+        xy_t, wh_t, r_t, Sigma_t = xywhr2xywhrsigma(target)
 
         # The first term of KLD
         diff = (xy_p - xy_t).unsqueeze(-1)
         xy_loss = torch.log(diff.permute(0, 2, 1).bmm(Sigma_t.inverse()).bmm(diff) + 1).sum(dim=-1)
 
-        Vb_p = wh_p[:, 0] * wh_p[:, 1]
-        Vb_t = wh_t[:, 0] * wh_t[:, 1]
+        #Vb_p = wh_p[:, 0] * wh_p[:, 1]
+        #Vb_t = wh_t[:, 0] * wh_t[:, 1]
 
-        K = Sigma_p.bmm((Sigma_p + Sigma_t).inverse())
-        Sigma = Sigma_p - K.bmm(Sigma_p)
+        #K = Sigma_p.bmm((Sigma_p + Sigma_t).inverse())
+        #Sigma = Sigma_p - K.bmm(Sigma_p)
 
-        eig = torch.linalg.eigvals(Sigma)
-        prod = (eig[:, 0] * eig[:, 1]).real
-        prod = torch.where(prod < 0, torch.full_like(prod, 0), prod)
-        Vb = 4 * torch.sqrt(prod)
+        #eig = torch.linalg.eigvals(Sigma)
+        #prod = (eig[:, 0] * eig[:, 1]).real
+        #prod = torch.where(prod < 0, torch.full_like(prod, 0), prod)
+        #Vb = 4 * torch.sqrt(prod)
 
         # make sure Vb doesn't go to NAN
-        assert not torch.any(torch.isnan(Vb))
+        #assert not torch.any(torch.isnan(Vb))
 
-        KFIoU = (4 - self.alpha) * Vb / (Vb_p + Vb_t - self.alpha * Vb + 1e-6)
+        #KFIoU = (4 - self.alpha) * Vb / (Vb_p + Vb_t - self.alpha * Vb + 1e-6)
+
+        wp2, hp2 = wh_p[:, 0] ** 2, wh_p[:, 1] ** 2
+        wt2, ht2 = wh_t[:, 0] ** 2, wh_t[:, 1] ** 2
+        cos2dr, sin2dr = torch.cos(r_p - r_t) ** 2, torch.sin(r_p - r_t) ** 2
+
+        A = torch.sqrt(1 + (wp2 * hp2) / (wt2 * ht2) + (wp2 / wt2 + hp2 / ht2) * cos2dr + (wp2 / ht2 + hp2 / wt2) * sin2dr)
+        B = torch.sqrt(1 + (wt2 * ht2) / (wp2 * hp2) + (wt2 / wp2 + ht2 / hp2) * cos2dr + (wt2 / hp2 + ht2 / wp2) * sin2dr)
+
+        KFIoU = (4 - self.alpha) / (A + B - self.alpha)
 
         if self.fun == 'ln':
             kf_loss = -torch.log(KFIoU + 1e-6)
@@ -203,10 +212,7 @@ class ComputeCSLLoss:
                     pwh = (ps[:, 2:4].sigmoid() * 2) ** 2 * anchors[i]
                     pbbox = torch.cat((pxy, pwh), -1)  # predicted box
 
-                    pcls = ps[..., 5:5 + self.nc] # confidence score of classses
-                    pg = ps[..., 5 + self.nc:]
-
-                    ciou = bbox_xywha_ciou(pbbox, tbbox[i])
+                    ciou = bbox_ciou(pbbox, tbbox[i])
 
                     reg_loss += (1.0 - ciou).mean()
 
@@ -214,13 +220,14 @@ class ComputeCSLLoss:
                     tconf[b, a, gj, gi] = (1.0 - self.gr) + self.gr * score_iou  # iou ratio
 
                     if self.nc > 1:
+                        pcls = ps[..., 5:5 + self.nc] # confidence score of classses
                         t = torch.zeros_like(pcls, device=device)  # targets
                         t[range(b.shape[0]), tcls[i]] = 1
                         # Binary Cross Entropy Loss for class' prediction
                         cls_loss += self.BCEcls(pcls, t)
 
                     # theta Classification by Circular Smooth Label
-                    theta_loss += self.BCEtheta(pg, tg[i])
+                    theta_loss += self.BCEtheta(ps[..., 5 + self.nc:], tg[i])
 
             # Focal Loss for object's prediction
             conf_loss += self.BCEobj(pi[..., 4], tconf) # objectness score
@@ -367,16 +374,14 @@ class ComputeKFIoULoss:
                     pa = norm_angle((ps[..., 4:5].sigmoid() - 0.5) * 0.5236 + anchors[i][:, 2:]) # predicted angle
                     pbbox = torch.cat((pxy, pwh, pa), -1)  # predicted box
 
-                    pcls = ps[..., 6:] # class confidence scores
-
                     kfloss, KFIoU = self.kfloss(pbbox, tbbox[i])
                     reg_loss += kfloss
 
-                    # TODO why can't use score_iou?
-                    #score_iou = KFIoU.detach().clamp(0).type(tconf.dtype)
-                    tconf[b, a, gj, gi] = (1.0 - self.gr) + self.gr * 1  # iou ratio
+                    score_iou = KFIoU.detach().clamp(0).type(tconf.dtype)
+                    tconf[b, a, gj, gi] = (1.0 - self.gr) + self.gr * score_iou  # iou ratio
 
                     if self.nc > 1:
+                        pcls = ps[..., 6:] # class confidence scores
                         t = torch.zeros_like(pcls, device=device)  # targets
                         t[range(b.shape[0]), tcls[i]] = 1
                         # Binary Cross Entropy Loss for class' prediction
@@ -410,7 +415,7 @@ class ComputeKFIoULoss:
         gain = torch.ones(8, device=targets.device).long()  # normalized to gridspace gain
         ai = torch.arange(na, device=targets.device).float().view(na, 1).repeat(1, nt)  # same as .repeat_interleave(nt)
 
-        # targets-> (na, nt, 187 + 1)
+        # targets-> (na, nt, 7 + 1)
         targets = torch.cat((targets.repeat(na, 1, 1), ai[:, :, None]), 2)  # append anchor indices
 
         g = 0.5  # bias

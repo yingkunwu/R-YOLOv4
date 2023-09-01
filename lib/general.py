@@ -104,7 +104,7 @@ def xyxyxyxy2xywha(boxes):
     return torch.stack((x, y, w, h, theta), -1)
 
 
-def xywhr2xywhsigma(xywhr):
+def xywhr2xywhrsigma(xywhr):
     """Convert oriented bounding box to 2-D Gaussian distribution.
     Args:
         xywhr (torch.Tensor): rbboxes with shape (N, 5)
@@ -118,7 +118,7 @@ def xywhr2xywhsigma(xywhr):
     assert _shape[-1] == 5
 
     xy = xywhr[..., :2]
-    wh = xywhr[..., 2:4].clamp(min=1e-7, max=1e7)
+    wh = xywhr[..., 2:4].clamp(min=1e-4, max=1e4)
     r = xywhr[..., 4]
 
     cos_r = torch.cos(r)
@@ -130,7 +130,7 @@ def xywhr2xywhsigma(xywhr):
 
     sigma = R.bmm(S).bmm(R.permute(0, 2, 1)).reshape((_shape[0], 2, 2))
 
-    return xy, wh, sigma
+    return xy, wh, r, sigma
 
 
 def post_process(predictions, conf_thres=0.5, iou_thres=0.4):
