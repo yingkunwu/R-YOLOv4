@@ -60,3 +60,18 @@ class Head(nn.Module):
         out1 = self.conv18(x1)
 
         return out3, out2, out1
+    
+
+class Headv5(nn.Module):
+    def __init__(self, output_ch):
+        super().__init__()
+        self.conv1 = Conv(256, output_ch, 1, 1, 'linear', bn=False, bias=True)
+        self.conv2 = Conv(512, output_ch, 1, 1, 'linear', bn=False, bias=True)
+        self.conv3 = Conv(1024, output_ch, 1, 1, 'linear', bn=False, bias=True)
+
+    def forward(self, x3, x2, x1):
+        out3 = self.conv1(x3)
+        out2 = self.conv2(x2)
+        out1 = self.conv3(x1)
+
+        return out3, out2, out1

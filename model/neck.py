@@ -1,21 +1,9 @@
 from model.utils import *
 
 
-class Neck(nn.Module):
-    def __init__(self):
+class Neckv4(nn.Module):
+    def __init__(self, output_ch):
         super().__init__()
-        self.conv1 = Conv(1024, 512, 1, 1, 'leaky')
-        self.conv2 = Conv(512, 1024, 3, 1, 'leaky')
-        self.conv3 = Conv(1024, 512, 1, 1, 'leaky')
-        # SPP
-        self.maxpool1 = nn.MaxPool2d(kernel_size=5, stride=1, padding=5 // 2)
-        self.maxpool2 = nn.MaxPool2d(kernel_size=9, stride=1, padding=9 // 2)
-        self.maxpool3 = nn.MaxPool2d(kernel_size=13, stride=1, padding=13 // 2)
-
-        self.conv4 = Conv(2048, 512, 1, 1, 'leaky')
-        self.conv5 = Conv(512, 1024, 3, 1, 'leaky')
-        self.conv6 = Conv(1024, 512, 1, 1, 'leaky')
-
         # upsampling
         self.conv7 = Conv(512, 256, 1, 1, 'leaky')
         self.up1 = nn.Upsample(scale_factor=2)
@@ -24,11 +12,7 @@ class Neck(nn.Module):
         self.conv8 = Conv(512, 256, 1, 1, 'leaky')
 
         # R -1 -3
-        self.conv9 = Conv(512, 256, 1, 1, 'leaky')
-        self.conv10 = Conv(256, 512, 3, 1, 'leaky')
-        self.conv11 = Conv(512, 256, 1, 1, 'leaky')
-        self.conv12 = Conv(256, 512, 3, 1, 'leaky')
-        self.conv13 = Conv(512, 256, 1, 1, 'leaky')
+        self.conv9 = C5(512, 256)
 
         # upsampling
         self.conv14 = Conv(256, 128, 1, 1, 'leaky')
@@ -37,30 +21,30 @@ class Neck(nn.Module):
         self.conv15 = Conv(256, 128, 1, 1, 'leaky')
 
         # R -1 -3
-        self.conv16 = Conv(256, 128, 1, 1, 'leaky')
-        self.conv17 = Conv(128, 256, 3, 1, 'leaky')
-        self.conv18 = Conv(256, 128, 1, 1, 'leaky')
-        self.conv19 = Conv(128, 256, 3, 1, 'leaky')
-        self.conv20 = Conv(256, 128, 1, 1, 'leaky')
+        self.conv16 = C5(256, 128)
+
+        self.conv21 = Conv(128, 256, 3, 1, 'leaky')
+        self.conv22 = Conv(256, output_ch, 1, 1, 'linear', bn=False, bias=True)
+
+        # R -4
+        self.conv23 = Conv(128, 256, 3, 2, 'leaky')
+
+        # R -1 -16
+        self.conv24 = C5(512, 256)
+
+        self.conv29 = Conv(256, 512, 3, 1, 'leaky')
+        self.conv30 = Conv(512, output_ch, 1, 1, 'linear', bn=False, bias=True)
+
+        # R -4
+        self.conv31 = Conv(256, 512, 3, 2, 'leaky')
+
+        # R -1 -37
+        self.conv32 = C5(1024, 512)
+
+        self.conv37 = Conv(512, 1024, 3, 1, 'leaky')
+        self.conv38 = Conv(1024, output_ch, 1, 1, 'linear', bn=False, bias=True)
 
     def forward(self, x1, x2, x3):
-        x1 = self.conv1(x1)
-        x1 = self.conv2(x1)
-        x1 = self.conv3(x1)
-        # SPP
-        # A maximum pool is applied to a sliding kernel of size say, 1×1, 5×5, 9×9, 13×13.
-        # The spatial dimension is preserved. The features maps from different kernel sizes are then
-        # concatenated together as output.
-        m1 = self.maxpool1(x1)
-        m2 = self.maxpool2(x1)
-        m3 = self.maxpool3(x1)
-
-        x1 = torch.cat([m3, m2, m1, x1], dim=1)
-        # SPP end
-        x1 = self.conv4(x1)
-        x1 = self.conv5(x1)
-        x1 = self.conv6(x1)
-
         # UP
         up1 = self.up1(self.conv7(x1))
         x2 = self.conv8(x2)
@@ -68,10 +52,6 @@ class Neck(nn.Module):
         x2 = torch.cat([x2, up1], dim=1)
 
         x2 = self.conv9(x2)
-        x2 = self.conv10(x2)
-        x2 = self.conv11(x2)
-        x2 = self.conv12(x2)
-        x2 = self.conv13(x2)
 
         # UP
         up2 = self.up2(self.conv14(x2))
@@ -80,9 +60,88 @@ class Neck(nn.Module):
         x3 = torch.cat([x3, up2], dim=1)
 
         x3 = self.conv16(x3)
-        x3 = self.conv17(x3)
-        x3 = self.conv18(x3)
-        x3 = self.conv19(x3)
-        x3 = self.conv20(x3)
 
-        return x3, x2, x1
+        # PAN
+        x6 = self.conv22(self.conv21(x3))
+
+        x3 = self.conv23(x3)
+
+        x2 = torch.cat([x3, x2], dim=1)
+        x2 = self.conv24(x2)
+
+        x5 = self.conv30(self.conv29(x2))
+
+        x2 = self.conv31(x2)
+
+        x1 = torch.cat([x2, x1], dim=1)
+        x1 = self.conv32(x1)
+
+        x4 = self.conv38(self.conv37(x1))
+
+        return x6, x5, x4
+    
+
+class Neckv5(nn.Module):
+    def __init__(self, output_ch):
+        super().__init__()
+        # upsampling
+        self.conv7 = Conv(1024, 512, 1, 1, 'leaky')
+        self.up1 = nn.Upsample(scale_factor=2, mode='nearest')
+
+        # csp
+        self.csp1 = C3(1024, 512, 3, shortcut=False)
+
+        # upsampling
+        self.conv14 = Conv(512, 256, 1, 1, 'leaky')
+        self.up2 = nn.Upsample(scale_factor=2, mode='nearest')
+
+        # csp
+        self.csp2 = C3(512, 256, 3, shortcut=False)
+
+        self.conv15 = Conv(256, output_ch, 1, 1, 'linear', bn=False, bias=True)
+
+        # R -1 -3
+        self.conv16 = Conv(256, 256, 3, 2, 'leaky')
+        self.csp3 = C3(512, 512, 3, shortcut=False)
+
+        self.conv17 = Conv(512, output_ch, 1, 1, 'linear', bn=False, bias=True)
+
+        self.conv18 = Conv(512, 512, 3, 2, 'leaky')
+        self.csp4 = C3(1024, 1024, 3, shortcut=False)
+
+        self.conv19 = Conv(1024, output_ch, 1, 1, 'linear', bn=False, bias=True)
+
+    def forward(self, x1, x2, x3):
+        x1 = self.conv7(x1)
+
+        # UP
+        up1 = self.up1(x1)
+        # Fuse
+        x2 = torch.cat([x2, up1], dim=1)
+
+        x2 = self.csp1(x2)
+        x2 = self.conv14(x2)
+
+        # UP
+        up2 = self.up2(x2)
+        # Fuse
+        x3 = torch.cat([x3, up2], dim=1)
+
+        x3 = self.csp2(x3)
+
+        x6 = self.conv15(x3)
+
+        # PAN
+        x3 = self.conv16(x3)
+        x2 = torch.cat([x2, x3], dim=1)
+        x2 = self.csp3(x2)
+
+        x5 = self.conv17(x2)
+
+        x2 = self.conv18(x2)
+        x1 = torch.cat([x1, x2], dim=1)
+        x1 = self.csp4(x1)
+
+        x4 = self.conv19(x1)
+
+        return x6, x5, x4
