@@ -67,8 +67,8 @@ class Train:
         os.makedirs(self.model_path)
         os.makedirs(os.path.join(self.model_path, "logs"))
 
-    def load_model(self, n_classes, model_config, mode):
-        self.model = Yolo(n_classes, model_config, mode)
+    def load_model(self, n_classes, model_config, mode, ver):
+        self.model = Yolo(n_classes, model_config, mode, ver)
         self.model = self.model.to(self.device)
         self.model.apply(weights_init_normal)  # 權重初始化
 
@@ -131,7 +131,7 @@ class Train:
         model_cfg, hyp_cfg = config['model'], config['hyp']
 
         self.check_model_path()
-        self.load_model(len(data["names"]), model_cfg, self.args.mode)
+        self.load_model(len(data["names"]), model_cfg, self.args.mode, self.args.ver)
         self.save_opts(config)
         self.logger = Logger(os.path.join(self.model_path, "logs"))
 
@@ -254,6 +254,7 @@ if __name__ == "__main__":
     parser.add_argument("--weights_path", type=str, default="", help="path to pretrained weights file")
     parser.add_argument("--model_name", type=str, default="trash", help="new model name")
     parser.add_argument("--mode", default="csl", nargs='?', choices=['csl', 'kfiou'], help="specify a model type")
+    parser.add_argument("--ver", default="yolov5", nargs='?', choices=['yolov4', 'yolov5'], help="specify a yolo version")
     parser.add_argument("--data", type=str, default="", help=".yaml path for data")
     parser.add_argument("--config", type=str, default="", help=".yaml path for configs")
 

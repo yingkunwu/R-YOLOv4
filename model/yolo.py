@@ -1,14 +1,13 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from model.backbone import Backbone
-from model.neck import Neck
-from model.head import Head
+from model.backbone import Backbonev4, Backbonev5
+from model.neck import Neckv4, Neckv5
 from model.yololayer import YoloCSLLayer, YoloKFIoULayer
 
 
 class Yolo(nn.Module):
-    def __init__(self, n_classes, model_config, mode):
+    def __init__(self, n_classes, model_config, mode, ver):
         super().__init__()
         # ---------------------------------------------------------------------
         # anchors = [[12, 16, 19, 36, 40, 28], [36, 75, 76, 55, 72, 146], [142, 110, 192, 243, 459, 401]]
@@ -35,15 +34,17 @@ class Yolo(nn.Module):
         self.anchors = an
         self.nc = n_classes
 
-        self.backbone = Backbone()
-        self.neck = Neck()
-        self.head = Head(output_ch)
+        yolo = {
+            'yolov4': [Backbonev4, Neckv4], 
+            'yolov5': [Backbonev5, Neckv5]
+        }
+        self.backbone = yolo[ver][0]()
+        self.neck = yolo[ver][1](output_ch)
         self.yolo = YoloLayer
 
     def forward(self, i, training):
         d3, d4, d5 = self.backbone(i)
-        x20, x13, x6 = self.neck(d5, d4, d3)
-        x2, x10, x18 = self.head(x20, x13, x6)
+        x2, x10, x18 = self.neck(d5, d4, d3)
         out = self.yolo([x2, x10, x18], training)
 
         return out
