@@ -254,7 +254,7 @@ if __name__ == "__main__":
     parser.add_argument("--weights_path", type=str, default="", help="path to pretrained weights file")
     parser.add_argument("--model_name", type=str, default="trash", help="new model name")
     parser.add_argument("--mode", default="csl", nargs='?', choices=['csl', 'kfiou'], help="specify a model type")
-    parser.add_argument("--ver", default="yolov5", nargs='?', choices=['yolov4', 'yolov5'], help="specify a yolo version")
+    parser.add_argument("--ver", default="yolov5", nargs='?', choices=['yolov4', 'yolov5', 'yolov7'], help="specify a yolo version")
     parser.add_argument("--data", type=str, default="", help=".yaml path for data")
     parser.add_argument("--config", type=str, default="", help=".yaml path for configs")
 

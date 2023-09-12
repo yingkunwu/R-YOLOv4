@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from model.backbone import Backbonev4, Backbonev5
-from model.neck import Neckv4, Neckv5
-from model.yololayer import YoloCSLLayer, YoloKFIoULayer
+from model.backbone import *
+from model.neck import *
+from model.yololayer import *
 
 
 class Yolo(nn.Module):
@@ -36,7 +36,8 @@ class Yolo(nn.Module):
 
         yolo = {
             'yolov4': [Backbonev4, Neckv4], 
-            'yolov5': [Backbonev5, Neckv5]
+            'yolov5': [Backbonev5, Neckv5],
+            'yolov7': [Backbonev7, Neckv7]
         }
         self.backbone = yolo[ver][0]()
         self.neck = yolo[ver][1](output_ch)

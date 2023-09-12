@@ -64,3 +64,38 @@ class Backbonev5(nn.Module):
         d5 = self.spp(d5)
 
         return d3, d4, d5
+
+
+class Backbonev7(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.cbs0 = Conv(3, 32, 3, 1, "swish")
+
+        self.cbs1 = Conv(32, 64, 3, 2, "swish") # downsample 2x
+        self.cbs2 = Conv(64, 64, 3, 1, "swish")
+
+        self.cbs3 = Conv(64, 128, 3, 2, "swish") # downsample 2x
+
+        self.elan1 = ELAN1(128, 256)
+
+        self.mc1 = MaxConv(256) # downsample 2x
+        self.elan2 = ELAN1(256, 512)
+
+        self.mc2 = MaxConv(512) # downsample 2x
+        self.elan3 = ELAN1(512, 1024)
+
+        self.mc3 = MaxConv(1024) # downsample 2x
+        self.elan4 = ELAN1(1024, 1024, e1=0.25, e2=0.25)
+
+        self.spp = SPPCSPC(1024, 512)
+
+    def forward(self, x):
+        x = self.cbs2(self.cbs1(self.cbs0(x)))
+        x = self.elan1(self.cbs3(x))
+        d3 = self.elan2(self.mc1(x))
+        d4 = self.elan3(self.mc2(d3))
+        d5 = self.elan4(self.mc3(d4))
+        
+        d5 = self.spp(d5)
+
+        return d3, d4, d5

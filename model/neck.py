@@ -85,14 +85,14 @@ class Neckv5(nn.Module):
     def __init__(self, output_ch):
         super().__init__()
         # upsampling
-        self.conv7 = Conv(1024, 512, 1, 1, 'leaky')
+        self.conv7 = Conv(1024, 512, 1, 1, 'swish')
         self.up1 = nn.Upsample(scale_factor=2, mode='nearest')
 
         # csp
         self.csp1 = C3(1024, 512, 3, shortcut=False)
 
         # upsampling
-        self.conv14 = Conv(512, 256, 1, 1, 'leaky')
+        self.conv14 = Conv(512, 256, 1, 1, 'swish')
         self.up2 = nn.Upsample(scale_factor=2, mode='nearest')
 
         # csp
@@ -101,12 +101,12 @@ class Neckv5(nn.Module):
         self.conv15 = Conv(256, output_ch, 1, 1, 'linear', bn=False, bias=True)
 
         # R -1 -3
-        self.conv16 = Conv(256, 256, 3, 2, 'leaky')
+        self.conv16 = Conv(256, 256, 3, 2, 'swish')
         self.csp3 = C3(512, 512, 3, shortcut=False)
 
         self.conv17 = Conv(512, output_ch, 1, 1, 'linear', bn=False, bias=True)
 
-        self.conv18 = Conv(512, 512, 3, 2, 'leaky')
+        self.conv18 = Conv(512, 512, 3, 2, 'swish')
         self.csp4 = C3(1024, 1024, 3, shortcut=False)
 
         self.conv19 = Conv(1024, output_ch, 1, 1, 'linear', bn=False, bias=True)
@@ -143,5 +143,75 @@ class Neckv5(nn.Module):
         x1 = self.csp4(x1)
 
         x4 = self.conv19(x1)
+
+        return x6, x5, x4
+
+
+class Neckv7(nn.Module):
+    def __init__(self, output_ch):
+        super().__init__()
+        # upsampling
+        self.conv1 = Conv(512, 256, 1, 1, 'swish')
+        self.up1 = nn.Upsample(scale_factor=2, mode='nearest')
+
+        self.elan1 = ELAN2(512, 256)
+
+        # upsampling
+        self.conv2 = Conv(256, 128, 1, 1, 'swish')
+        self.up2 = nn.Upsample(scale_factor=2, mode='nearest')
+
+        self.elan2 = ELAN2(256, 128)
+
+        self.conv3 = Conv(1024, 256, 1, 1, 'swish')
+        self.conv4 = Conv(512, 128, 1, 1, 'swish')
+
+        self.mc1 = MaxConv(128, e=1.0) # c2 = 256
+        self.elan3 = ELAN2(512, 256)
+        self.mc2 = MaxConv(256, e=1.0) # c2 = 512
+        self.elan4 = ELAN2(1024, 512)
+
+        self.repVgg1 = RepConv(128, 256)
+        self.ia1 = ImplicitA(256)
+        self.conv5 = Conv(256, output_ch, 1, 1, 'linear', bn=False, bias=True)
+        self.im1 = ImplicitM(output_ch)
+        
+        self.repVgg2 = RepConv(256, 512)
+        self.ia2 = ImplicitA(512)
+        self.conv6 = Conv(512, output_ch, 1, 1, 'linear', bn=False, bias=True)
+        self.im2 = ImplicitM(output_ch)
+
+        self.repVgg3 = RepConv(512, 1024)
+        self.ia3 = ImplicitA(1024)
+        self.conv7 = Conv(1024, output_ch, 1, 1, 'linear', bn=False, bias=True)
+        self.im3 = ImplicitM(output_ch)
+
+    def forward(self, x1, x2, x3):
+        x4 = self.up1(self.conv1(x1))
+        x2 = self.conv3(x2)
+
+        x2 = torch.cat([x2, x4], dim=1)
+        x2 = self.elan1(x2)
+
+        x5 = self.up2(self.conv2(x2))
+        x3 = self.conv4(x3)
+
+        x3 = torch.cat([x3, x5], dim=1)
+        x3 = self.elan2(x3)
+
+        x6 = self.im1(self.conv5(self.ia1(self.repVgg1(x3))))
+
+        x3 = self.mc1(x3)
+
+        x2 = torch.cat([x2, x3], dim=1)
+        x2 = self.elan3(x2)
+
+        x5 = self.im2(self.conv6(self.ia2(self.repVgg2(x2))))
+
+        x2 = self.mc2(x2)
+
+        x1 = torch.cat([x1, x2], dim=1)
+        x1 = self.elan4(x1)
+
+        x4 = self.im3(self.conv7(self.ia3(self.repVgg3(x1))))
 
         return x6, x5, x4
