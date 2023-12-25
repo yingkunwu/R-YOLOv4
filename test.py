@@ -228,12 +228,12 @@ class Test:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
 
-    def load_model(self, n_classes, model_config, mode):
+    def load_model(self, n_classes, model_config, mode, ver):
         if not os.path.isfile(self.args.weight_path):
             logger.error("Model weight not found.")
             exit(1)
         pretrained_dict = torch.load(self.args.weight_path, map_location=torch.device('cpu'))
-        self.model = Yolo(n_classes, model_config, mode)
+        self.model = Yolo(n_classes, model_config, mode, ver)
         self.model = self.model.to(self.device)
         self.model.load_state_dict(pretrained_dict)
 
@@ -248,7 +248,7 @@ class Test:
         with open(self.args.data, "r") as stream:
             data = yaml.safe_load(stream)
 
-        self.load_model(len(data["names"]), model_cfg, self.args.mode)
+        self.load_model(len(data["names"]), model_cfg, self.args.mode, self.args.ver)
 
         if self.args.mode == "csl":
             csl = True
@@ -265,6 +265,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--weight_path", type=str, default="", help="file path to load model weight")
     parser.add_argument("--mode", default="csl", nargs='?', choices=['csl', 'kfiou'], help="specify a model type")
+    parser.add_argument("--ver", default="yolov5", nargs='?', choices=['yolov4', 'yolov5', 'yolov7'], help="specify a yolo version")
     parser.add_argument("--conf_thres", type=float, default=0.001, help="object confidence threshold")
     parser.add_argument("--iou_thres", type=float, default=0.65, help="iou thresshold for non-maximum suppression")
     parser.add_argument("--batch_size", type=int, default=1, help="size of the batches")

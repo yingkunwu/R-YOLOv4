@@ -1,8 +1,8 @@
 type: DOTA # specify a dataset class to load data
 
-train: data/DOTA/trainsplit  # path to load train data
-val: data/DOTA/valsplit  # path to load val data
-test: data/DOTA/valsplit  # path to load test data
+train: data/DOTA/split/train  # path to load train data
+val: data/DOTA/split/val  # path to load val data
+test: data/DOTA/split/val  # path to load test data
 
 # class names
 names: ['plane', 'ship', 'storage tank', 'baseball diamond', 'tennis court', 'basketball court', 
