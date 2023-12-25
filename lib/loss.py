@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from detectron2.layers.rotated_boxes import pairwise_iou_rotated
 
 from lib.general import xywhr2xywhrsigma, norm_angle
 
@@ -194,7 +195,7 @@ class ComputeCSLLoss:
         reg_loss, conf_loss, cls_loss = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
         theta_loss = torch.zeros(1, device=device)
 
-        tcls, tbbox, tg, indices, anchors = self.build_targets(outputs, target)
+        tcls, tbbox, ta, tg, indices, anchors = self.build_targets(outputs, target)
         
         for i, pi in enumerate(outputs):
             b, a, gj, gi = indices[i]  # image, anchor, gridy, gridx
@@ -229,6 +230,20 @@ class ComputeCSLLoss:
                     # theta Classification by Circular Smooth Label
                     theta_loss += self.BCEtheta(ps[..., 5 + self.nc:], tg[i])
 
+                    #_, ptheta = torch.max(ps[..., 5 + self.nc:], 1, keepdim=True) # θ ∈ int[0, 179]
+                    #ptheta = ptheta - 90 # θ ∈ [-90, 89]
+
+                    #prbbox = torch.cat((pbbox, ptheta), -1)
+                    #trbbox = torch.cat((tbbox[i], ta[i]), -1)
+                    
+                    #riou = []
+                    #for j in range(prbbox.shape[0]):
+                    #    riou.append(pairwise_iou_rotated(prbbox[j][None, :], trbbox[j][None, :]).squeeze(0))
+                    #riou = torch.cat(riou, 0)
+
+                    #score_iou = riou.detach().clamp(0).type(tconf.dtype)
+                    #tconf[b, a, gj, gi] = (1.0 - self.gr) + self.gr * score_iou  # iou ratio
+
             # Focal Loss for object's prediction
             conf_loss += self.BCEobj(pi[..., 4], tconf) # objectness score
 
@@ -255,7 +270,7 @@ class ComputeCSLLoss:
     def build_targets(self, p, targets):
         # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
         na, nt = self.na, targets.shape[0]  # number of anchors, targets
-        tcls, tbox, tg, indices, anch = [], [], [], [], []
+        tcls, tbox, ta, tg, indices, anch = [], [], [], [], [], []
         gain = torch.ones(188, device=targets.device).long()  # normalized to gridspace gain
         ai = torch.arange(na, device=targets.device).float().view(na, 1).repeat(1, nt)  # same as .repeat_interleave(nt)
 
@@ -308,11 +323,12 @@ class ComputeCSLLoss:
             a = t[:, -1].long()  # anchor indices
             indices.append((b, a, gj.clamp_(0, gain[3] - 1), gi.clamp_(0, gain[2] - 1)))  # image, anchor, grid indices
             tbox.append(torch.cat((gxy - gij, gwh), 1))  # box
-            tg.append(t[:, 7:-1])
+            ta.append(t[:, 6:7] * 180 / np.pi) # oriented angle of target boxes
+            tg.append(t[:, 7:-1]) # circular smooth label
             anch.append(anchors[a])  # anchors
             tcls.append(c)  # class
 
-        return tcls, tbox, tg, indices, anch
+        return tcls, tbox, ta, tg, indices, anch
     
 
 class ComputeKFIoULoss:
@@ -371,7 +387,7 @@ class ComputeKFIoULoss:
                 if ps.shape[0] > 0:
                     pxy = ps[..., 0:2].sigmoid() * 2 - 0.5
                     pwh = (ps[:, 2:4].sigmoid() * 2) ** 2 * anchors[i][:, :2]
-                    pa = norm_angle((ps[..., 4:5].sigmoid() - 0.5) * 0.5236 + anchors[i][:, 2:]) # predicted angle
+                    pa = norm_angle((ps[..., 4:5].sigmoid() - 0.5) * 1.1 + anchors[i][:, 2:]) # predicted angle
                     pbbox = torch.cat((pxy, pwh, pa), -1)  # predicted box
 
                     kfloss, KFIoU = self.kfloss(pbbox, tbbox[i])
@@ -440,7 +456,7 @@ class ComputeKFIoULoss:
 
                 # Calculate the difference (cosine) between the angle of targets and anchor boxes
                 d = torch.abs(torch.cos(t[:, :, 6:7] - anchors[:, None, 2:]))
-                k = (d > 0.966).reshape(j.shape)
+                k = (d > 0.866).reshape(j.shape)
 
                 t = t[torch.logical_and(j, k)]  # filter
 

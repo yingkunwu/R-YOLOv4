@@ -95,6 +95,126 @@ class C3(nn.Module):
         return self.cv3(torch.cat((self.m(self.cv1(x)), self.cv2(x)), dim=1))
 
 
+class ELAN1(nn.Module):
+    def __init__(self, c1, c2, e1=0.5, e2=0.5):
+        # Efficient Layer Aggregation Networks
+        super().__init__()
+        h1 = int(c1 * e1)  # hidden channels
+        h2 = int(c1 * e2)  # hidden channels
+
+        self.cv1 = Conv(c1, h1, 1, 1, "swish")
+        self.cv2 = Conv(c1, h1, 1, 1, "swish")
+        self.cv3 = Conv(h1, h2, 3, 1, "swish")
+        self.cv4 = Conv(h1, h2, 3, 1, "swish")
+        self.cv5 = Conv(h2, h2, 3, 1, "swish")
+        self.cv6 = Conv(h2, h2, 3, 1, "swish")
+        self.cv7 = Conv((h1 + h2) * 2, c2, 1, 1, "swish")
+
+    def forward(self, x):
+        x1 = self.cv1(x)
+        x2 = self.cv2(x)
+        x3 = self.cv4(self.cv3(x2))
+        x4 = self.cv6(self.cv5(x3))
+        return self.cv7(torch.cat((x1, x2, x3, x4), dim=1))
+
+
+class ELAN2(nn.Module):
+    def __init__(self, c1, c2, e1=0.5, e2=0.25):
+        # Efficient Layer Aggregation Networks
+        super().__init__()
+        h1 = int(c1 * e1)  # hidden channels
+        h2 = int(c1 * e2)  # hidden channels
+
+        self.cv1 = Conv(c1, h1, 1, 1, "swish")
+        self.cv2 = Conv(c1, h1, 1, 1, "swish")
+        self.cv3 = Conv(h1, h2, 3, 1, "swish")
+        self.cv4 = Conv(h2, h2, 3, 1, "swish")
+        self.cv5 = Conv(h2, h2, 3, 1, "swish")
+        self.cv6 = Conv(h2, h2, 3, 1, "swish")
+        self.cv7 = Conv(h1 * 2 + h2 * 4, c2, 1, 1, "swish")
+
+    def forward(self, x):
+        x1 = self.cv1(x)
+        x2 = self.cv2(x)
+        x3 = self.cv3(x2)
+        x4 = self.cv4(x3)
+        x5 = self.cv5(x4)
+        x6 = self.cv6(x5)
+        return self.cv7(torch.cat((x1, x2, x3, x4, x5, x6), dim=1))
+
+
+class MaxConv(nn.Module):
+    def __init__(self, c1, e=0.5):
+        # MaxConv: Efficient Convolution Module for Backbone Network
+        super().__init__()
+        c_ = int(c1 * e)  # hidden channels
+
+        self.m = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.cv1 = Conv(c1, c_, 1, 1, "swish")
+        self.cv2 = Conv(c1, c_, 1, 1, "swish")
+        self.cv3 = Conv(c_, c_, 3, 2, "swish")
+
+    def forward(self, x):
+        x1 = self.cv1(self.m(x))
+        x2 = self.cv3(self.cv2(x))
+        return torch.cat((x1, x2), dim=1)
+
+
+class ImplicitA(nn.Module):
+    def __init__(self, channel, mean=0., std=.02):
+        super(ImplicitA, self).__init__()
+        self.channel = channel
+        self.mean = mean
+        self.std = std
+        self.implicit = nn.Parameter(torch.zeros(1, channel, 1, 1))
+        nn.init.normal_(self.implicit, mean=self.mean, std=self.std)
+
+    def forward(self, x):
+        return self.implicit + x
+    
+
+class ImplicitM(nn.Module):
+    def __init__(self, channel, mean=1., std=.02):
+        super(ImplicitM, self).__init__()
+        self.channel = channel
+        self.mean = mean
+        self.std = std
+        self.implicit = nn.Parameter(torch.ones(1, channel, 1, 1))
+        nn.init.normal_(self.implicit, mean=self.mean, std=self.std)
+
+    def forward(self, x):
+        return self.implicit * x
+
+
+class RepConv(nn.Module):
+    # Represented convolution
+    # https://arxiv.org/abs/2101.03697
+
+    def __init__(self, c1, c2, k=3, s=1, p=1):
+        super(RepConv, self).__init__()
+
+        self.silu = nn.SiLU()
+        self.rbr_identity = (nn.BatchNorm2d(num_features=c1) if c2 == c1 and s == 1 else None)
+
+        self.rbr_dense = nn.Sequential(
+            nn.Conv2d(c1, c2, k, s, p, bias=False),
+            nn.BatchNorm2d(num_features=c2),
+        )
+
+        self.rbr_1x1 = nn.Sequential(
+            nn.Conv2d( c1, c2, 1, s, 0, bias=False),
+            nn.BatchNorm2d(num_features=c2),
+        )
+
+    def forward(self, inputs):
+        if self.rbr_identity is None:
+            id_out = 0
+        else:
+            id_out = self.rbr_identity(inputs)
+
+        return self.silu(self.rbr_dense(inputs) + self.rbr_1x1(inputs) + id_out)
+
+
 class SPP(nn.Module):
     # Spatial Pyramid Pooling (SPP)
     # A maximum pool is applied to a sliding kernel of size say, 1×1, 5×5, 9×9, 13×13.
@@ -139,3 +259,24 @@ class SPPF(nn.Module):
         y1 = self.m(x)
         y2 = self.m(y1)
         return self.cv2(torch.cat([x, y1, y2, self.m(y2)], 1))
+
+
+class SPPCSPC(nn.Module):
+    # CSP https://github.com/WongKinYiu/CrossStagePartialNetworks
+    def __init__(self, c1, c2, e=0.5, k=(5, 9, 13)):
+        super(SPPCSPC, self).__init__()
+        c_ = int(2 * c2 * e)  # hidden channels
+        self.cv1 = Conv(c1, c_, 1, 1, "swish")
+        self.cv2 = Conv(c1, c_, 1, 1, "swish")
+        self.cv3 = Conv(c_, c_, 3, 1, "swish")
+        self.cv4 = Conv(c_, c_, 1, 1, "swish")
+        self.m = nn.ModuleList([nn.MaxPool2d(kernel_size=x, stride=1, padding=x // 2) for x in k])
+        self.cv5 = Conv(4 * c_, c_, 1, 1, "swish")
+        self.cv6 = Conv(c_, c_, 3, 1, "swish")
+        self.cv7 = Conv(2 * c_, c2, 1, 1, "swish")
+
+    def forward(self, x):
+        x1 = self.cv4(self.cv3(self.cv1(x)))
+        y1 = self.cv6(self.cv5(torch.cat([x1] + [m(x1) for m in self.m], 1)))
+        y2 = self.cv2(x)
+        return self.cv7(torch.cat((y1, y2), dim=1))

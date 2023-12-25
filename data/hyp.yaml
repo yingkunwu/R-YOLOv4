@@ -9,7 +9,7 @@ model:
 # Hyperparameters
 hyp:
   # For training
-  fl_gamma: 2.0  # focal loss gamma (efficientDet default gamma=1.5)
+  fl_gamma: 0.0  # focal loss gamma (efficientDet default gamma=1.5)
   box: 0.05  # box loss gain
   obj: 1.0  # obj loss gain
   obj_pw: 1.0
@@ -21,8 +21,8 @@ hyp:
   hsv_s: 0.7  # image HSV-Saturation augmentation (fraction)
   hsv_v: 0.4  # image HSV-Value augmentation (fraction)
   rotate: 45  # image rotation (+/- deg)
-  translate: 0.2  # image translation (+/- fraction)
-  scale: 0.3  # image scale (+/- gain)
+  translate: 0.1  # image translation (+/- fraction)
+  scale: 0.5  # image scale (+/- gain)
   flipud: 0.5  # image flip up-down (probability)
   fliplr: 0.5  # image flip left-right (probability)
   mosaic: 1.0  # image mosaic (probability)
