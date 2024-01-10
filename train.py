@@ -165,7 +165,7 @@ class Train:
         logger.info(f'Image sizes {self.args.img_size}')
         logger.info(f'Starting training for {self.args.epochs} epochs...')
         
-        best_fitness = 0
+        best_fitness = -1
 
         for epoch in range(self.args.epochs):
             # -------------------
